@@ -38,7 +38,7 @@ def create_order_route():
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form['email']
+        email = request.form['email'].strip().lower()
         password = request.form['password']
 
         conn = get_db_connection()
