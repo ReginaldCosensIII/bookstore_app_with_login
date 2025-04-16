@@ -51,7 +51,9 @@ def is_valid_name(name):
     return re.match(r"^[A-Za-z\s'-]{1,50}$", name)
 
 def is_valid_phone(phone):
-    return re.match(r"^\d{10,15}$", phone)
+    # Remove common formatting symbols: hyphens, spaces, parentheses
+    cleared_phone = re.sub(r"[-()\s]", "", phone)
+    return re.match(r"^\d{10,15}$", cleared_phone)
 
 def is_valid_zip(zip_code):
     return re.match(r"^\d{5}(-\d{4})?$", zip_code)
