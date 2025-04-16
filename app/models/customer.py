@@ -1,11 +1,13 @@
-# app/models/customer.py
 from flask_login import UserMixin
+from logger import logger # Importing custom logger for logging
 
 class Customer(UserMixin):
     def __init__(self, id, email, password):
         self.id = id
         self.email = email
         self.password = password
+
+        logger.debug(f"Customer object initialized with ID: {self.id} and Email: {self.email}")
 
     # Flask-Login integration
     @property
