@@ -56,7 +56,7 @@ bookstore_app_with_login/
 ## 🔧 Setup & Installation (Local)
 
 1. Clone the repository:
-   git clone https://github.com/ReginaldCosensIII/bookstore_app.git
+   git clone https://github.com/ReginaldCosensIII/bookstore_app_with_login.git
    cd bookstore_app
 
 2. Create a virtual environment:
