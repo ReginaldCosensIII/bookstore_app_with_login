@@ -14,18 +14,30 @@ Database: PostgreSQL
 Deployment: Render
 Version Control: Git & GitHub
 📁 Project Structure
-bookstore_app/
+bookstore_app_with_login/
 ├── app/
-│   ├── __init__.py       # App factory function
-│   ├── routes.py         # Application routes using Blueprint
-│   ├── services/         # Business logic (e.g., order creation, inventory updates)
-│   │   └── order_service.py
-│   └── templates/        # HTML templates
-│       └── index.html    # Homepage template
-├── main.py               # Entry point for local dev
-├── requirements.txt      # Python dependencies
-├── .render.yaml          # Render deployment config
-└── README.md             # Project overview and setup instructionsd
+│   ├── __init__.py                # App factory: creates and configures Flask app
+│   ├── routes.py                  # Routes using Blueprint (`main`)
+│   ├── models/
+│   │   ├── db.py                  # DB connection logic
+│   │   └── customer.py            # Customer model and user loader
+│   ├── services/
+│   │   ├── __init__.py            # Makes services a package
+│   │   ├── auth_service.py        # Auth functions: register, login, validate, hash
+│   │   └── order_service.py       # Business logic for order processing
+│   └── templates/
+│       ├── index.html             # Homepage
+│       ├── login.html             # Login page
+│       ├── register.html          # Registration page
+│       └── order_confirmation.html# (Optional) Order success/confirmation page
+├── .gitignore                     # Excludes cache, logs, dumps, env files, etc.
+├── .render.yaml                   # Render deployment configuration
+├── main.py                        # Entry point for running app locally
+├── requirements.txt               # Cleaned Python dependencies
+├── logger.py                      # Logging setup used throughout the app
+├── gen_password_hash.py          # Tool to generate hashed passwords
+├── test_order.py                  # Optional test script for order creation
+└── README.md                      # Project description, setup, usage
 🔧 Setup & Installation (Local)
 Clone the repository: git clone https://github.com/ReginaldCosensIII/bookstore_app.git cd bookstore_app
 

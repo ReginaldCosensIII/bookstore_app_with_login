@@ -1,0 +1,54 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment files
+.env
+*.env
+
+# Logs
+logs/
+*.log
+
+# Database dumps or local backups
+*.dump
+
+# macOS files
+.DS_Store
+
+# Windows files
+Thumbs.db
+
+# Virtual environment
+venv/
+ENV/
+env/
+.venv/
+
+# Render-specific (local config overrides)
+.render-local.yaml
+
+# Pytest cache
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+
+# Coverage reports
+htmlcov/
+coverage.xml
+*.cover
+
+# Compiled files
+*.so
+
+# Test artifacts
+test_*.py
+
+# Personal scripts
