@@ -11,7 +11,7 @@ A Flask-based web application for managing a bookstore inventory, featuring user
 - Automatically update stock quantity upon purchase
 - Organized and modular project structure
 - Responsive design for desktop and mobile devices
-- Deployed on [Render.com]([https://render.com](https://bookstore-app-with-login.onrender.com))
+- Deployed on Render @ ([https://render.com](https://bookstore-app-with-login.onrender.com))
 
 ---
 
