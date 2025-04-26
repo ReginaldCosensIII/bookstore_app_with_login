@@ -1,105 +1,132 @@
+# app/services/auth_service.py
+import re
+from html import escape
 from flask_login import LoginManager
 from app.models.customer import Customer
 from app.models.db import get_db_connection
 from logger import logger  # Importing customer logger here
-from werkzeug.security import generate_password_hash
-import re
-import re
-from html import escape
+from werkzeug.security import generate_password_hash, check_password_hash
 
 login_manager = LoginManager()
 login_manager.login_view = 'main.login'
 
 @login_manager.user_loader
 def load_user(user_id):
+    """
+    Load a user from the database using the user_id.
+    This function is called by Flask-Login to load the user object from the session.
+    """ 
     try:
+        # Get a database connection
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                
+                # Execute the SQL query to fetch the user by user_id
                 cur.execute(
                     'SELECT customer_id, email, password FROM customers WHERE customer_id = %s',
                     (user_id,)
                 )
+                
+                # Fetch the user row from the database
                 row = cur.fetchone()
 
+        # Verify if the row is not None (i.e., user exists)
         if row:
             logger.info(f"User {user_id} loaded from session.")
             return Customer(id=row["customer_id"], email=row["email"], password=row["password"])
+        
         else:
             logger.warning(f"User {user_id} not found in database.")
             return None
+        
     except Exception as e:
         logger.error(f"Error loading user {user_id}: {e}")
         return None
-from html import escape
-
-def sanitize_form_input(form_data):
-    return {k: escape(v) for k, v in form_data.items()}
-
-def is_valid_email(email):
-    return re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", email)
-
-def is_email_taken(email):
+    
+def authenticate_user(email, password):
+    """
+    Authenticate a user by checking the email and password against the database.
+    If the user is found and the password matches, return the user object.
+    """
+    try:
+        # Sanitize the email to prevent SQL injection and convert it to lowercase
+        email = email.strip()
+        email = email.lower()
+        email = escape(email)
+        
+        # Get a database connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                
+                # Execute the SQL query to fetch the user by email
+                cur.execute('SELECT customer_id, email, password FROM customers WHERE email = %s', (email,))
+                user = cur.fetchone()
+        
+        # Verify if the user exists and the password matches        
+        if user and user["password"] and check_password_hash(user["password"], password):
+            return Customer(id=user["customer_id"], email=user["email"], password=user["password"])
+        
+        else:
+            return None
+        
+    except Exception as e:
+        logger.exception("Error during user authentication.")
+        raise e
+    
+def login_user(user, password):
+    """
+    Log in a user by checking the email and password against the database.
+    If the user is found and the password matches, return True.
+    Otherwise, return False.
+    """
+    # Check user and check if the password matches using the check_password_hash function
+    if user and check_password_hash(user.password, password):
+        logger.info(f"User {user.email} logged in successfully.")
+        return True
+    
+    else:
+        logger.warning(f"Login failed for user {user.email}.")
+        return False
+    
+def get_user_by_email(email):
+    """
+    Fetch a user from the database using the email address.
+    This function is used to check if the email already exists in the database during registration.
+    """
+    # Convert the email to lowercase and escape it to prevent SQL injection
+    email = email.strip()
+    email = email.lower()
+    email = escape(email)
+    
+    # Get a database connection
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM customers WHERE email = %s", (email,))
-            return cur.fetchone() is not None
+            
+            # Execute the SQL query to fetch the user by email
+            cur.execute('SELECT customer_id, email, password FROM customers WHERE email = %s', (email))
+            
+            # Fetch the user row from the database
+            row = cur.fetchone()
+            
+            return row
 
-def is_strong_password(password):
-    return re.match(r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*()_+])[A-Za-z\d!@#$%^&*()_+]{8,}$', password)
-
-def is_valid_name(name):
-    return re.match(r"^[A-Za-z\s'-]{1,50}$", name)
-
-def is_valid_phone(phone):
-    # Remove common formatting symbols: hyphens, spaces, parentheses
-    cleared_phone = re.sub(r"[-()\s]", "", phone)
-    return re.match(r"^\d{10,15}$", cleared_phone)
-
-def is_valid_zip(zip_code):
-    return re.match(r"^\d{5}(-\d{4})?$", zip_code)
-
-def is_valid_state(state):
-    return re.match(r"^[A-Za-z]{2}$", state)
-
-def validate_registration(form_data):
-    errors = []
-
-    # Names
-    if not is_valid_name(form_data.get('first_name', '')):
-        errors.append("Invalid first name.")
-    if not is_valid_name(form_data.get('last_name', '')):
-        errors.append("Invalid last name.")
-
-    # Email
-    email = form_data.get('email', '')
-    if not is_valid_email(email):
-        errors.append("Invalid email format.")
-    elif is_email_taken(email):
-        errors.append("Email is already registered.")
-
-    # Phone
-    if not is_valid_phone(form_data.get('phone_number', '')):
-        errors.append("Invalid phone number. Use digits only, 10–15 digits.")
-
-    # Password
-    password = form_data.get('password', '')
-    confirm_password = form_data.get('confirm_password', '')
-    if not is_strong_password(password):
-        errors.append("Password must be at least 8 characters with an uppercase letter, number, and special character.")
-    elif password != confirm_password:
-        errors.append("Passwords do not match.")
-
-    # Address fields
-    if len(form_data.get('address_line1', '')) > 100:
-        errors.append("Address Line 1 too long.")
-    if len(form_data.get('address_line2', '')) > 100:
-        errors.append("Address Line 2 too long.")
-    if not is_valid_name(form_data.get('city', '')):
-        errors.append("Invalid city name.")
-    if not is_valid_state(form_data.get('state', '')):
-        errors.append("Invalid state. Use 2-letter abbreviation.")
-    if not is_valid_zip(form_data.get('zip_code', '')):
-        errors.append("Invalid ZIP code format.")
-
-    return errors
-
+def get_name_by_id(user_id):
+    """
+    Fetch the first and last name of a user from the database using the user_id.
+    This function is used to display the user's name in the application.
+    """ 
+    # Get a database connection
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            
+            # Execute the SQL query to fetch the user's first and last name by user_id
+            cur.execute('SELECT first_name, last_name FROM customers WHERE customer_id = %s', (user_id,))
+            
+            # Fetch the user row from the database
+            row = cur.fetchone()
+            
+            # Verify if the row is not None (i.e., user exists)
+            if row:
+                return f"{row[0]} {row[1]}"
+            
+    return None

@@ -1,7 +1,10 @@
+# app/services/__init__.py
+import os
 from flask import Flask
 from app.services.auth_service import login_manager
 
 def create_app():
+    """Create and configure the Flask application."""
     app = Flask(__name__)
     app.secret_key = os.environ.get('SECRET_KEY', 'dev_key_for_local')
     

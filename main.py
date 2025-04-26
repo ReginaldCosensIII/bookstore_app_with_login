@@ -1,5 +1,6 @@
+# main.py
 from app import create_app
-from logger import logger  # Import your custom logger
+from logger import logger  # Custom logger
 
 app = create_app()
 
