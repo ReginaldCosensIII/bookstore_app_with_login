@@ -1,19 +1,31 @@
-📚 Bookstore Management Web App
+# 📚 Bookstore Management Web App
+
 A simple Flask web application backed by PostgreSQL for managing a bookstore inventory, built as a personal project to demonstrate full-stack development skills and hands-on database integration.
 
-🚀 Features
-View a catalog of available books
-Create orders and calculate total purchase price
-Automatically update stock quantity upon purchase
-Organized and modular project structure
-Deployable on Render.com
-🛠 Tech Stack
-Backend: Python, Flask
-Frontend: HTML (Jinja2 templating)
-Database: PostgreSQL
-Deployment: Render
-Version Control: Git & GitHub
-📁 Project Structure
+---
+
+## 🚀 Features
+
+- View a catalog of available books
+- Create orders and calculate total purchase price
+- Automatically update stock quantity upon purchase
+- Organized and modular project structure
+- Deployable on [Render.com](https://render.com)
+
+---
+
+## 🛠 Tech Stack
+
+- **Backend**: Python, Flask  
+- **Frontend**: HTML (Jinja2 templating)  
+- **Database**: PostgreSQL  
+- **Deployment**: Render  
+- **Version Control**: Git & GitHub  
+
+---
+
+## 📁 Project Structure
+```
 bookstore_app_with_login/
 ├── app/
 │   ├── __init__.py                # App factory: creates and configures Flask app
@@ -38,21 +50,34 @@ bookstore_app_with_login/
 ├── gen_password_hash.py          # Tool to generate hashed passwords
 ├── test_order.py                  # Optional test script for order creation
 └── README.md                      # Project description, setup, usage
-🔧 Setup & Installation (Local)
-Clone the repository: git clone https://github.com/ReginaldCosensIII/bookstore_app.git cd bookstore_app
+```
+---
 
-Create a virtual environment: python -m venv venv source venv/bin/activate # On Windows use venv\Scripts\activate
+## 🔧 Setup & Installation (Local)
 
-Install dependencies: pip install -r requirements.txt
+1. Clone the repository:
+   git clone https://github.com/ReginaldCosensIII/bookstore_app_with_login.git
+   cd bookstore_app
 
-Set environment variables: DATABASE_URL=your_postgres_connection_url
+2. Create a virtual environment:
+   python -m venv venv
+   source venv/bin/activate  # On Windows use venv\Scripts\activate
 
-Run the app locally
+3. Install dependencies:
+   pip install -r requirements.txt
+
+4. Set environment variables:
+   DATABASE_URL=your_postgres_connection_url
+
+5. Run the app locally
+
+---
 
 🌐 Deployment
 
-This app is deployed on Render. The .render.yaml file handles the configuration:
-
+This app is deployed on Render.
+The .render.yaml file handles the configuration:
+```
 services:
   - type: web
     name: bookstore-app
@@ -67,18 +92,29 @@ services:
 
 databases:
   - name: bookstore-db
+```
+---
+
 🧠 Author
 
+```
 Reginald Cosens III
 GitHub:  @ReginaldCosensIII
 Email:   ReginaldCosensIII@gmail.com
+```
+---
+
 📌 Future Improvements
 
-Add user authentication system (admin & customer roles)
-Improve UI with CSS framework (e.g., Bootstrap or Tailwind)
-Add RESTful API support
-Implement order history and customer profiles
-Add pagination and search functionality
-📜 License:
+-  Add (admin & customer roles)
+-  Improve UI with CSS framework (e.g., Bootstrap or Tailwind)
+-  Add RESTful API support
+-  Implement order history and customer profiles
+-  Add pagination and search functionality
 
+---
+
+📜 License:
+```
 This project is for educational and demonstration purposes.
+```

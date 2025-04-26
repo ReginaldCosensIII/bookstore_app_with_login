@@ -1,38 +1,82 @@
-<!-- templates/register.html -->
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Register</title>
-</head>
-<body>
-    <h2>Register</h2>  
-    <!-- 🔔 Flash messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div style="padding:10px; margin-bottom:10px; border:1px solid #ccc; background-color: {% if category == 'danger' %}#f8d7da{% elif category == 'success' %}#d4edda{% else %}#e2e3e5{% endif %}; color: #333;">
-            {{ message }}
-          </div>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}  
-    <form method="POST" action="{{ url_for('main.register') }}">
-        <h4>Account Information</h4>
-        <label>First Name:</label><input type="text" name="first_name" value="{{ form_data.first_name if form_data else '' }}" required><br>
-        <label>Last Name:</label><input type="text" name="last_name" value="{{ form_data.last_name if form_data else '' }}" required><br>
-        <label>Email:</label><input type="email" name="email" value="{{ form_data.email if form_data else '' }}" required><br>
-        <label>Phone Number:</label><input type="text" name="phone_number" value="{{ form_data.phone_number if form_data else '' }}" required><br>
-        <label>Password:</label><input type="password" name="password" placeholder="Password" required><br>
-        <label>Confirm Password:</label><input type="password" name="confirm_password" placeholder="Confirm Password" required>
+{% extends "base.html" %}
 
-        <h4>Shipping Address</h4>
-        <label>Address Line 1:</label><input type="text" name="address_line1" value="{{ form_data.address_line1 if form_data else '' }}" required><br>
-        <label>Address Line 2:</label><input type="text" name="address_line2" value="{{ form_data.address_line2 if form_data else '' }}"><br>
-        <label>City:</label><input type="text" name="city" value="{{ form_data.city if form_data else '' }}" required><br>
-        <label>State:</label><input type="text" name="state" value="{{ form_data.state if form_data else '' }}" required><br>
-        <label>ZIP Code:</label><input type="text" name="zip_code" value="{{ form_data.zip_code if form_data else '' }}" required><br>
-        
-        <button type="submit">Register</button>
-    </form>
-</body>
-</html>
+{% block title %}Register{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-7">
+         <div class="card shadow-sm rounded p-4 form-register">
+             <div class="card-body">
+                <h2 class="card-title text-center mb-4">Register</h2>
+
+                {# Flash messages handled by base.html #}
+
+                <form method="POST" action="{{ url_for('main.register') }}" novalidate>
+                    {# If using Flask-WTF, add form.hidden_tag() #}
+                    {# {{ form.hidden_tag() }} #}
+
+                    <h4 class="mb-3 border-bottom pb-2">Account Information</h4>
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <label for="first_name" class="form-label">First Name</label>
+                            <input type="text" class="form-control" id="first_name" name="first_name" value="{{ form_data.first_name if form_data else request.form.first_name if request.form else '' }}" required>
+                            {# Add invalid-feedback div here if needed #}
+                        </div>
+                         <div class="col-sm-6">
+                            <label for="last_name" class="form-label">Last Name</label>
+                            <input type="text" class="form-control" id="last_name" name="last_name" value="{{ form_data.last_name if form_data else request.form.last_name if request.form else '' }}" required>
+                        </div>
+                        <div class="col-12">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" value="{{ form_data.email if form_data else request.form.email if request.form else '' }}" required>
+                        </div>
+                        <div class="col-12">
+                             <label for="phone_number" class="form-label">Phone Number</label>
+                             <input type="tel" class="form-control" id="phone_number" name="phone_number" value="{{ form_data.phone_number if form_data else request.form.phone_number if request.form else '' }}" required>
+                        </div>
+                         <div class="col-sm-6">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
+                        </div>
+                         <div class="col-sm-6">
+                            <label for="confirm_password" class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" id="confirm_password" name="confirm_password" placeholder="Confirm Password" required>
+                        </div>
+                    </div>
+
+                    <h4 class="my-4 border-bottom pb-2">Shipping Address</h4>
+                     <div class="row g-3">
+                         <div class="col-12">
+                            <label for="address_line1" class="form-label">Address Line 1</label>
+                            <input type="text" class="form-control" id="address_line1" name="address_line1" value="{{ form_data.address_line1 if form_data else request.form.address_line1 if request.form else '' }}" required>
+                        </div>
+                        <div class="col-12">
+                            <label for="address_line2" class="form-label">Address Line 2 <span class="text-muted">(Optional)</span></label>
+                            <input type="text" class="form-control" id="address_line2" name="address_line2" value="{{ form_data.address_line2 if form_data else request.form.address_line2 if request.form else '' }}">
+                        </div>
+                        <div class="col-md-5">
+                            <label for="city" class="form-label">City</label>
+                            <input type="text" class="form-control" id="city" name="city" value="{{ form_data.city if form_data else request.form.city if request.form else '' }}" required>
+                        </div>
+                        <div class="col-md-4">
+                             <label for="state" class="form-label">State</label>
+                             <input type="text" class="form-control" id="state" name="state" value="{{ form_data.state if form_data else request.form.state if request.form else '' }}" required>
+                        </div>
+                        <div class="col-md-3">
+                             <label for="zip_code" class="form-label">ZIP Code</label>
+                             <input type="text" class="form-control" id="zip_code" name="zip_code" value="{{ form_data.zip_code if form_data else request.form.zip_code if request.form else '' }}" required>
+                        </div>
+                     </div>
+
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">Register</button>
+                    </div>
+                </form>
+                <div class="mt-4 text-center">
+                    <small class="text-muted">Already have an account? <a href="{{ url_for('main.login') }}">Login</a></small>
+                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

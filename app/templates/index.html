@@ -1,96 +1,226 @@
-<form method="POST" action="/create_order">
+{% extends "base.html" %} {# Use the updated base.html #}
 
-  <!-- 🔔 Flash messages -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      {% for category, message in messages %}
-        <div style="padding:10px; margin-bottom:10px; border:1px solid #ccc; background-color: {% if category == 'danger' %}#f8d7da{% elif category == 'success' %}#d4edda{% else %}#e2e3e5{% endif %}; color: #333;">
-          {{ message }}
-        </div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
-  <h2>Bookstore Order Form</h2>
-  <p>Please select the books you want to order and specify the quantity.</p>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Title</th>
-          <th>Author</th>
-          <th>Price</th>
-          <th>Quantity</th>
-          <th>Select</th>
-        </tr>
-      </thead>
-      <tbody>
+{% block title %}Bookstore - Create Order{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Create New Order</h1>
+
+{# Flash messages handled by base.html #}
+
+{# Welcome message - styled slightly #}
+<p class="lead">Welcome, {{ users_name }}!</p>
+
+{# IMPORTANT: Keep the form and action intact #}
+<form id="order-form" method="POST" action="/create_order">
+
+    <h3 class="mb-3">Select Books:</h3>
+
+    {# --- Book Selection using Cards --- #}
+    {# Responsive grid: 1 col default, 2 on sm, 3 on md, 4 on lg #}
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4 mb-4">
+        {# --- Loop through books - Jinja logic unchanged --- #}
         {% for book in books %}
-        <tr>
-          <td>{{ book[1] }}</td>
-          <td>{{ book[2] }}</td>
-          <td>${{ book[3] }}</td>
-          <td>
-            <input type="number" name="quantity_{{ book[0] }}" min="0" value="0" onchange="updateTotal()">
-          </td>
-          <td>
-            <input type="checkbox" name="selected_books" value="{{ book[0] }}">
-            <input type="hidden" name="price_{{ book[0] }}" value="{{ book[3] }}">
-          </td>
-        </tr>
+        <div class="col">
+            {# Card for each book - h-100 for equal height #}
+            <div class="card shadow-sm rounded h-100 book-card">
+                {# Optional Image - Add if you have image URLs #}
+                {# <img src="{{ book.image_url | default(url_for('static', filename='images/placeholder.png')) }}" class="card-img-top" alt="{{ book.title }}"> #}
+                <div class="card-body d-flex flex-column"> {# Flex column for layout #}
+                    <h5 class="card-title">{{ book.title }}</h5>
+                    <p class="card-text text-muted flex-grow-1"><small>by {{ book.author }}</small></p> {# flex-grow pushes price/controls down #}
+                    <p class="card-text fs-5 fw-bold mb-3">${{ "%.2f"|format(book.price) }}</p>
+
+                    {# --- Checkbox and Quantity - Structure preserved for JS --- #}
+                    <div class="d-flex justify-content-between align-items-center mt-auto"> {# Align controls at bottom #}
+                        <div class="form-check">
+                             {# Checkbox - Jinja value unchanged, added Bootstrap class #}
+                            <input type="checkbox" class="form-check-input book-checkbox" value="{{ book.book_id }}" id="book_{{ book.book_id }}">
+                            <label class="form-check-label" for="book_{{ book.book_id }}">Select</label>
+                        </div>
+                        {# Quantity Input - Jinja data-book-id unchanged, added Bootstrap class #}
+                        <input type="number" min="0" value="0" class="form-control quantity-input" data-book-id="{{ book.book_id }}" style="width: 80px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+            <div class="col-12">
+                <p class="text-center text-muted">No books available at the moment.</p>
+            </div>
         {% endfor %}
-      </tbody>
-    </table>
-    <h3>Order Summary</h3>
-    <p>Please review your order before submitting.</p>  
-    <p><strong>Selected Books:</strong></p>
+         {# --- End Book Loop --- #}
+    </div>
+    {# --- End Book Selection Grid --- #}
 
-    <ul id="selected_books"></ul>
-    <!-- 🟢 Add this line -->
-    <p><strong>Total: $<span id="order-total">0.00</span></strong></p>
-  
-    <button type="submit" class="btn btn-primary">Create Order</button>
-  
-    <!-- ✅ JavaScript can now target #order-total -->
+
+    {# --- Order Summary --- #}
+    <div class="order-summary mt-5">
+        <h3 class="mb-3">Order Summary:</h3>
+        {# Use Bootstrap table styling #}
+        <div class="table-responsive"> {# Make table scroll horizontally on small screens #}
+            <table class="table table-bordered table-hover">
+                <thead class="table-light"> {# Use lighter header #}
+                    <tr>
+                        <th>Title</th>
+                        <th class="text-end">Quantity</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                {# --- Summary Table Body - JS Populates This --- #}
+                <tbody id="order-summary">
+                    {# JavaScript will populate this section #}
+                </tbody>
+                {# --- End Summary Table Body --- #}
+                <tfoot>
+                    <tr class="table-light fw-bold">
+                         <td colspan="3" class="text-end">Total Amount:</td>
+                         <td class="text-end fs-5"><span id="total-amount">$0.00</span></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    {# --- End Order Summary --- #}
+
+    {# Submit Button - Styled with Bootstrap #}
+    <div class="d-grid gap-2 col-6 mx-auto mt-4">
+        <button type="submit" class="btn btn-primary btn-lg">Submit Order</button>
+    </div>
+
+    {# --- Hidden Inputs for JS - These remain unchanged --- #}
+    {# JavaScript will add/update these inputs: #}
+    {# <input type="hidden" name="items" value="..."> #}
+    {# <input type="hidden" name="total_amount" value="..."> #}
+</form>
+{# --- End Form --- #}
+
+{# Footer handled by base.html #}
+{% endblock %}
+
+
+{% block scripts %}
+{# --- IMPORTANT: JavaScript remains exactly the same --- #}
 <script>
-  function updateTotal() {
-    let total = 0;
-    const checkboxes = document.querySelectorAll('input[name="selected_books"]:checked');
-    const selectedBooksList = document.getElementById("selected_books");
+      function updateTotal() {
+          let total = 0.0;
+          const orderSummary = document.getElementById("order-summary");
+          const orderItems = [];
 
-    selectedBooksList.innerHTML = ""; // Clear the current summary
+          document.querySelectorAll(".book-checkbox:checked").forEach(checkbox => {
+              // Find the closest card ancestor to then find elements within that card
+              const card = checkbox.closest(".book-card");
+              if (!card) return; // Should not happen, but safety check
 
-    checkboxes.forEach(checkbox => {
-      const bookId = checkbox.value;
-      const row = checkbox.closest("tr");
-      const title = row.children[0].innerText;  // Book title from first <td>
-      const qtyInput = document.querySelector(`input[name="quantity_${bookId}"]`);
-      const priceInput = document.querySelector(`input[name="price_${bookId}"]`);
+              const bookId = checkbox.value;
+              const title = card.querySelector(".card-title").textContent.trim();
+              // Extract price carefully (assuming it's the bold text before controls)
+              const priceText = card.querySelector(".fs-5.fw-bold").textContent.trim().replace('$', '');
+              const price = parseFloat(priceText);
+              // Find the quantity input specifically associated with this book card
+              const qtyInput = card.querySelector(`.quantity-input[data-book-id="${String(bookId)}"]`);
+              const quantity = parseInt(qtyInput?.value || 0);
 
-      const quantity = parseInt(qtyInput.value) || 0;
-      const price = parseFloat(priceInput.value) || 0;
+              if (!isNaN(price) && quantity > 0) {
+                  const itemTotal = price * quantity;
+                  total += itemTotal;
+                  orderItems.push({
+                      book_id: parseInt(bookId),
+                      quantity: quantity,
+                      title: title,
+                      price: price,
+                      total: itemTotal.toFixed(2)
+                  });
+              }
+          });
 
-      if (quantity > 0) {
-        const itemTotal = quantity * price;
-        total += itemTotal;
+          // Update order summary table (using Bootstrap table structure)
+          orderSummary.innerHTML = ''; // Clear previous summary
+          if (orderItems.length === 0) {
+              orderSummary.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Select books and quantity above</td></tr>';
+          } else {
+                orderItems.forEach(item => {
+                    const row = document.createElement("tr");
+                    row.innerHTML = `
+                        <td>${item.title}</td>
+                        <td class="text-end">${item.quantity}</td>
+                        <td class="text-end">$${item.price.toFixed(2)}</td>
+                        <td class="text-end">$${item.total}</td>
+                    `;
+                    orderSummary.appendChild(row);
+                });
+          }
 
-        // Add item to summary list
-        const li = document.createElement("li");
-        li.innerText = `${title} — ${quantity} x $${price.toFixed(2)} = $${itemTotal.toFixed(2)}`;
-        selectedBooksList.appendChild(li);
+
+          // Update total amount display (within the tfoot span)
+          document.getElementById("total-amount").textContent = `$${total.toFixed(2)}`;
+          return orderItems; // Return items for prepareOrderData
       }
-    });
 
-    document.getElementById("order-total").innerText = total.toFixed(2);
-  }
+      function prepareOrderData() {
+          const items = updateTotal(); // Recalculate to get current state
+          if (items.length === 0) {
+              alert("Please select at least one book and set a quantity greater than 0.");
+              return null; // Indicate failure
+          }
 
-  document.addEventListener("DOMContentLoaded", () => {
-    const checkboxes = document.querySelectorAll('input[name="selected_books"]');
-    const quantityInputs = document.querySelectorAll('input[type="number"]');
+          const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-    checkboxes.forEach(cb => cb.addEventListener("change", updateTotal));
-    quantityInputs.forEach(qty => qty.addEventListener("input", updateTotal));
+          // Ensure items only contains book_id and quantity as needed by backend
+          const backendItems = items.map(item => ({
+              book_id: item.book_id,
+              quantity: item.quantity
+          }));
 
-    updateTotal();
-  });
-</script>
-  </form>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+          return {
+              items: backendItems, // Send only required data
+              total_amount: totalAmount.toFixed(2)
+          };
+      }
+
+      document.getElementById("order-form").addEventListener("submit", function (e) {
+          const orderData = prepareOrderData();
+          if (!orderData) {
+              e.preventDefault();  // Block form submission if data is invalid
+              return;
+          }
+
+          const form = e.target;
+
+          // Add or update hidden input for items (JSON stringified)
+          let itemsInput = form.querySelector('input[name="items"]');
+          if (!itemsInput) {
+              itemsInput = document.createElement("input");
+              itemsInput.type = "hidden";
+              itemsInput.name = "items";
+              form.appendChild(itemsInput);
+          }
+          // Make sure to stringify the correct structure expected by backend
+          itemsInput.value = JSON.stringify(orderData.items);
+
+          // Add or update hidden input for total_amount
+          let totalInput = form.querySelector('input[name="total_amount"]');
+          if (!totalInput) {
+              totalInput = document.createElement("input");
+              totalInput.type = "hidden";
+              totalInput.name = "total_amount";
+              form.appendChild(totalInput);
+          }
+          totalInput.value = orderData.total_amount;
+
+          // Form submission proceeds naturally now
+      });
+
+      // Keep order summary live-updated when checkboxes or quantity inputs change
+      document.querySelectorAll(".book-checkbox, .quantity-input").forEach(el => {
+          el.addEventListener("input", updateTotal); // Use 'input' for better responsiveness
+      });
+
+      // Initial calculation on page load
+      document.addEventListener('DOMContentLoaded', updateTotal);
+
+  </script>
+{# Include jQuery only if other parts of your site absolutely need it, Bootstrap 5 JS doesn't require it #}
+{# <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> #}
+{% endblock %}

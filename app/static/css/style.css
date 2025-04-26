@@ -1,0 +1,75 @@
+/* static/css/style.css */
+
+body {
+    background-color: #f8f9fa; /* Light grey background */
+    /* Ensure footer sticks to bottom */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1; /* Allow main content to grow and push footer down */
+}
+
+.card {
+    border: none; /* Cleaner look, rely on shadow */
+    border-radius: 0.5rem; /* Softer rounded corners */
+}
+
+/* Form styling improvements */
+.form-signin, .form-register {
+    max-width: 450px; /* Limit form width */
+    padding: 2rem;
+    margin: auto;
+}
+
+.form-label {
+    font-weight: 500; /* Slightly bolder labels */
+}
+
+/* Customize Bootstrap primary color (Example: Soft Blue) */
+/* You can uncomment and modify these lines */
+/* :root { */
+/* --bs-primary-rgb: 71, 129, 183; */
+/* --bs-secondary-rgb: 108, 117, 125; */
+/* } */
+
+/* Book card styling */
+.book-card .card-img-top {
+    max-height: 200px; /* Adjust as needed */
+    object-fit: cover; /* Or 'contain' depending on desired image display */
+    border-top-left-radius: 0.5rem; /* Match card rounding */
+    border-top-right-radius: 0.5rem;
+}
+
+.book-card {
+    transition: transform .2s ease-in-out, box-shadow .2s ease-in-out;
+}
+
+.book-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, .15) !important; /* Slightly larger shadow on hover */
+}
+
+/* Adjust table header background */
+table th {
+    background-color: #e9ecef; /* Lighter gray for table headers */
+}
+
+/* Ensure quantity inputs in cards are reasonably sized */
+.book-card .quantity-input {
+     width: 70px !important; /* Override default if needed */
+     display: inline-block; /* Make it align nicely */
+     margin-left: 0.5rem;
+}
+
+.book-card .form-check-input {
+    width: 1.25em; /* Slightly larger checkboxes */
+    height: 1.25em;
+}
+
+/* Center align checkbox/quantity header in book list table */
+.book-selection-header {
+    text-align: center;
+}
