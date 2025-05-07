@@ -1,439 +1,225 @@
-# app/services/order_service.py
-import json
+# bookstore_app_with_login/app/services/order_service.py
+
+import json # For potentially handling JSON input if needed differently
 from logger import logger
-from decimal import Decimal
 from datetime import datetime
 from app.models.book import Book
 from app.models.order import Order
-from app.models.customer import Customer
-from psycopg2.extras import RealDictCursor
+from app.models.customer import Customer # Needed for getting customer details
 from app.models.order_item import OrderItem
 from app.models.db import get_db_connection
-from app.order_exceptions import QuantityExceedsStock
-from app.services.book_service import get_quantity_by_book_id
+from decimal import Decimal, InvalidOperation # Use Decimal for accurate money calculations
+from app.order_exceptions import QuantityExceedsStock, InvalidOrderFormat, DatabaseOperationError # Custom DB error during order processing
 
-def create_order(customer_id, order_items, total_amount):
+# It seems OrderCreationError isn't explicitly raised, consider removing if unused
+# from app.order_exceptions import OrderCreationError
+
+def create_order(customer_id, items_data, total_amount_from_form):
     """
-    Create an order and its items in the database.
-    Validate the order items and total amount before proceeding.
-    If any validation fails, log the error and return a failure response.
-    If the order is created successfully, return the order ID.
+    Creates a new order, validates items, saves to the database, and updates stock.
+
+    Handles the entire order creation workflow within a database transaction.
+
+    Args:
+        customer_id (int): The ID of the customer placing the order.
+        items_data (list[dict]): A list of dictionaries, where each dict represents an item
+                                 and should contain 'book_id' and 'quantity'.
+                                 Example: [{'book_id': 1, 'quantity': 2}, ...]
+        total_amount_from_form (float): The total amount calculated on the frontend (for verification).
+
+    Returns:
+        dict: A dictionary containing:
+              {'success': True, 'order_id': new_order_id} on success.
+              {'success': False, 'message': error_message} on failure due to validation
+              or stock issues (before database operations start).
+
+    Raises:
+        DatabaseOperationError: If a database error occurs during the save process.
+        ValueError: If input data types are incorrect (should be caught earlier ideally).
     """
+    logger.info(f"Attempting to create order for customer_id: {customer_id} with items: {items_data}")
+
+    # --- Input Validation ---
+    if not customer_id or not isinstance(customer_id, int):
+        logger.error("Order creation failed: Invalid or missing customer_id.")
+        # Raising InvalidOrderFormat here might be caught by the generic Exception handler later.
+        # Returning a dict is clearer for flow control in the route.
+        # Consider standardizing return format or exception usage.
+        raise InvalidOrderFormat("Invalid customer ID provided.")
+
+    if not items_data or not isinstance(items_data, list) or len(items_data) == 0:
+        logger.error("Order creation failed: Items data is missing, not a list, or empty.")
+        raise InvalidOrderFormat("Order must contain at least one item.")
+
+    # --- Transactional Processing ---
+    conn = None # Initialize connection variable
     try:
-        # Initialize the order items and reassure total amount is a float
-        total_amount = float(total_amount)
-        items = json.loads(order_items)
-        
-        # Validate order items and total amount
-        if not validate_order_items(items, total_amount, customer_id):
-            logger.error("Invalid order items format")
-            raise ValueError("Invalid order items format")
-        
-        # Get DB connection to create order
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                
-                # Insert order and set order ID
-                order_id = insert_order(cur, customer_id, total_amount)
-                
-                # Check if order ID is valid
-                if not order_id:
-                    raise ValueError("Order insertion failed")
-                
-                # Log the order ID
-                logger.info(f"Order inserted with ID: {order_id}")
-                
-                # Insert order items if not raise an error
-                if not insert_order_items(cur, items, order_id):
-                    raise ValueError("Failed to insert order items")
-                
-                # Decrease stock quantities if not raise an error
-                if not decrease_stock_quantities(cur, items):
-                    raise ValueError("Failed to update stock quantities")
-                
-                # Commit the transaction
-                conn.commit()
-                
-                # Log the successful order and items insertion
-                logger.info(f"Order and items committed successfully: {order_id}")
-                
-                return {"success": True, "order_id": order_id}
-            
-    # Handle specific exceptions for better error handling
-    except (json.JSONDecodeError, TypeError) as e:
-        logger.error(f"Error decoding JSON or invalid type: {e}")
-        conn.rollback()              
-        return {"success": False, "error": str(e)}
+        conn = get_db_connection() # Get a connection for the transaction
+        calculated_total_price = Decimal('0.00') # Use Decimal for calculation
+        order_items_to_create = [] # List to hold validated OrderItem objects
 
-def validate_order_items(order_items, total_amount, customer_id):
-    """
-    Validate order items, total amount, customer_id to ensure they are in the correct format and 
-    have valid quantities.
-    """
-    # Check if customer_id is an int and positive integer
-    if not isinstance(customer_id, int):
-        logger.error("Invalid customer ID")
-        return False
-    
-    # Check if customer id exists in the database
-    if not check_if_customer_exists(customer_id):
-        logger.error(f"Customer with ID {customer_id} does not exist")
-        return False
-    
-    # Total amount and customer ID should be positive integers
-    if total_amount <= 0 or customer_id <= 0:
-        logger.error("Total amount or customer ID is not a positive integer")
-        return False
-    
-    # For loop to checks each order item in the order_items list
-    for item in order_items:
-        book_id = item["book_id"]
-        quantity = item["quantity"]
-           
-        # Check if item is a dictionary
-        if not isinstance(item, dict):
-            logger.error("Order item is not a dictionary")
-            return False
-        
-        # Check if item contains book_id and quantity
-        if "book_id" not in item or "quantity" not in item:
-            logger.error("Order item does not contain book_id or quantity")
-            return False
-        
-        # Check if book_id and quantity are integers
-        if not isinstance(item["book_id"], int) or not isinstance(item["quantity"], int):
-            logger.error("book_id or quantity is not an integer")
-            return False
-        
-        # Check if book_id is positive integers
-        if book_id <= 0:
-            logger.error("book_id is not a positive integer")
-            return False
+        # --- Item Validation and Calculation (within the 'try' block, before DB writes) ---
+        for item_dict in items_data:
+            book_id = item_dict.get("book_id")
+            quantity = item_dict.get("quantity")
 
-        # Check if quantity is a positive integer
-        if quantity <= 0:
-            logger.error("Quantity is not a positive integer")
-            return False
-            
-        # Check if the book exists in the database
-        if not check_if_book_exists(book_id):
-            logger.error(f"Book with ID {book_id} does not exist")
-            return False    
-          
-        # Check if the quantity is available in stock
-        available = get_quantity_by_book_id(book_id) 
-                    
-        if quantity > available:
-            # Log the error if requested quantity is greater than available stock
-            logger.error(f"Requested {quantity} but only {available} in stock for book {book_id}")
-            raise QuantityExceedsStock(get_title_by_book_id(book_id), quantity, available)
+            # Validate item structure and types
+            if not isinstance(book_id, int) or not isinstance(quantity, int) or quantity <= 0:
+                raise InvalidOrderFormat(f"Invalid data for item: book_id={book_id}, quantity={quantity}.")
 
-    return True 
+            # Fetch the book details (use the connection context if model methods require it)
+            # Assuming Book.get_by_id handles its own connection/cursor or can accept one
+            book = Book.get_by_id(book_id) # Fetch within the transaction scope potentially
+            if not book:
+                raise InvalidOrderFormat(f"Book with ID {book_id} not found.")
 
-def get_title_by_book_id(book_id):
-    """
-    Get the title of a book by its ID.
-    """
-    # Get DB connection
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to fetch the book title by its ID
-            cur.execute('SELECT title FROM books WHERE book_id = %s;', (book_id,))
-            
-            # Verify if the book exists by fetching the row
-            row = cur.fetchone()
-            
-            # If row returns true, return the book title
-            if row:
-                return row[0]
-            
-    return None 
+            # Check stock availability
+            if not book.has_stock(quantity):
+                 # Raise specific exception for stock issues
+                raise QuantityExceedsStock(book.title, quantity, book.stock_quantity)
 
-def insert_order(cur, customer_id, total_amount):
-    """
-    Insert an order into the database using the provided cursor.
-    """
-    # Validate customer ID and total amount
-    if not isinstance(customer_id, int) or customer_id <= 0:
-        logger.error("Invalid customer ID")
-        return None
-    
-    # Execute the SQL query to insert order into the database
-    cur.execute(
-        "INSERT INTO orders (customer_id, order_date, total_amount) "
-        "VALUES (%s, CURRENT_TIMESTAMP, %s) RETURNING order_id;",
-        (customer_id, total_amount)
-    )
-    
-    # Fetch the order ID of the inserted order
-    row = cur.fetchone()
-    
-    # Check if the order was inserted successfully
-    if row is None:
-        logger.error("Failed to insert order")
-        return None
-    
-    return row[0]
+            # Calculate item subtotal and add to total
+            item_price = book.price * quantity # Decimal arithmetic
+            calculated_total_price += item_price
 
-def insert_order_items(cur, order_items, order_id):
-    """
-    Insert order items into the database using the provided cursor.
-    """
-    # Validate order ID and order items
-    if not isinstance(order_items, list) or len(order_items) == 0:
-        logger.error("Order items are not in the correct format")
-        return False
-    
-    # For loop to insert each order item into the database
-    for item in order_items:
-        book_id = item["book_id"]
-        quantity = item["quantity"]
-        
-        # Execute the SQL query to insert order item into the database
-        cur.execute(
-            "INSERT INTO order_items (order_id, book_id, quantity) VALUES (%s, %s, %s);",
-            (order_id, book_id, quantity)
+            # Create OrderItem object (without saving yet)
+            order_items_to_create.append(OrderItem(book_id=book.book_id, quantity=quantity))
+
+        # --- Verification (Optional but Recommended) ---
+        # Compare calculated total with the total received from the form
+        try:
+             form_total_decimal = Decimal(total_amount_from_form)
+             # Use is_close for floating point comparison robustness if needed, or exact match for Decimal
+             if calculated_total_price != form_total_decimal:
+                 logger.warning(f"Order total mismatch for customer {customer_id}. Calculated: {calculated_total_price}, Form: {form_total_decimal}. Proceeding with calculated total.")
+                 # Decide whether to proceed, raise error, or just log
+                 # For now, we proceed using the server-calculated total.
+        except (InvalidOperation, TypeError):
+             logger.error(f"Invalid total amount received from form for customer {customer_id}: {total_amount_from_form}")
+             raise InvalidOrderFormat("Invalid total amount format received.")
+
+
+        # --- Database Operations (Order and Stock Update) ---
+
+        # Create the Order object (header)
+        order_header = Order(
+            customer_id=customer_id,
+            total_amount=calculated_total_price # Use server-calculated total
+            # items list will be populated by adding OrderItem instances
         )
-        
-        # Check if the order item was inserted successfully
-        if cur.rowcount == 0:
-            logger.error(f"Failed to insert order item for book ID {book_id}")
-            return False
-        
-    return True
+        # Add validated OrderItem objects to the order header
+        for oi in order_items_to_create:
+            order_header.add_item(oi)
 
-def decrease_stock_quantities(cur, order_items):
-    """
-    Decrease stock for each book in the order using a single cursor.
-    """
-    # Validate order items
-    if not isinstance(order_items, list) or len(order_items) == 0:
-        logger.error("Order items are not in the correct format")
-        return False
-    
-    # For loop to decrease stock for each book in the order
-    for item in order_items:
-        book_id = item["book_id"]
-        quantity = item["quantity"]
-        
-        # Execute the SQL query to decrease stock quantity for the book
-        cur.execute(
-            "UPDATE books SET stock_quantity = stock_quantity - %s WHERE book_id = %s;",
-            (quantity, book_id)
-        )
-        
-        # Check if the stock quantity was updated successfully
-        if cur.rowcount == 0:
-            logger.error(f"Failed to decrease stock for book ID {book_id}")
-            return False
-        
-    return True
+        # Save the order header and all items (this handles inserts)
+        # The Order.save method should handle inserting items via OrderItem.save
+        new_order_id = order_header.save(conn) # Pass the connection
 
-def decrease_stock(book_id, quantity):
-    """
-    Decrease stock for a specific book.
-    """
-    # Validate book ID
-    if not isinstance(book_id, int) or book_id <= 0:
-        logger.error("Invalid book ID")
-        return False
-      
-    # Validate quantity
-    if not isinstance(quantity, int) or quantity <= 0:
-        logger.error("Invalid quantity")
-        return False
-     
-    # Check if the book exists in the database
-    if not check_if_book_exists(book_id):
-        logger.error(f"Book with ID {book_id} does not exist")
-        return False
-       
-    # Check if the quantity is available in stock
-    available = get_quantity_by_book_id(book_id)
-    if quantity > available:        
-        logger.error(f"Requested {quantity} but only {available} in stock for book {book_id}")
-        raise QuantityExceedsStock(get_title_by_book_id(book_id), quantity, available)
-        return False
-    
-    # Get DB connection and to decrease stock for the book
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to decrease stock quantity for the book
-            cur.execute(
-                "UPDATE books SET stock_quantity = stock_quantity - %s WHERE book_id = %s;",
-                (quantity, book_id)
-            )
-            
-            # Check if the update was successful
-            if cur.rowcount == 0:
-                logger.error(f"Failed to decrease stock for book ID {book_id}")
-                return False
-            
-    return True
+        # Decrease stock for each book AFTER order and items are successfully inserted
+        for item in order_items_to_create:
+            # Re-fetch book within the same transaction context might be safer if stock could change,
+            # but decreases atomicity. Assuming stock check earlier is sufficient for this operation.
+            # OR, pass 'conn' to decrease_stock if it needs the cursor.
+             book_to_update = Book.get_by_id(item.book_id) # Fetch again or use previously fetched 'book' if safe
+             if book_to_update:
+                 book_to_update.decrease_stock(item.quantity, conn) # Pass the connection
+             else:
+                 # This case implies book was deleted between validation and stock update - very unlikely but possible
+                 raise DatabaseOperationError(f"Book {item.book_id} disappeared during order processing.")
 
-def check_if_book_exists(book_id):
-    """
-    Get DB connection and check if a book exists in the database using its book ID.
-    """
-    # Get DB connection
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to check if the book exists by its ID
-            cur.execute('SELECT book_id FROM books WHERE book_id = %s;', (book_id,))
-            
-            # Verify if the book exists by fetching the row
-            row = cur.fetchone()
-            
-            # If row returns true, it means the book exists in the database
-            if row is not None:
-                logger.info(f"Book with ID {book_id} exists in the database")
-                return True
-        
-        return False
-    
-def check_if_order_exists(order_id):
-    """
-    Get DB connection and check if an order exists in the database using its order ID.
-    """
-    # Get DB connection
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to check if the order exists by its ID
-            cur.execute('SELECT order_id FROM orders WHERE order_id = %s;', (order_id,))
-            
-            # Verify if the order exists by fetching the row
-            row = cur.fetchone()
-            
-            # If row returns true, it means the order exists in the database
-            if row:
-                return True
-        
-        return False
-    
-def check_if_customer_exists(customer_id):
-    """
-    Get DB connection and check if a customer exists in the database using its customer ID.
-    """
-    # Get DB connection
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to check if the customer exists by its ID
-            cur.execute('SELECT customer_id FROM customers WHERE customer_id = %s;', (customer_id,))
-            
-            # Verify if the customer exists by fetching the row
-            row = cur.fetchone()
-            
-            # If row returns true, it means the customer exists in the database
-            if row:
-                return True
-        
-        return False
 
-def get_order_details(order_id):
+        # --- Commit Transaction ---
+        conn.commit()
+        logger.info(f"Order {new_order_id} created and committed successfully for customer {customer_id}.")
+
+        # Return success indicator and the new order ID
+        return {"success": True, "order_id": new_order_id}
+
+    except (InvalidOrderFormat, QuantityExceedsStock) as e:
+        # Handle validation/stock errors: Log, rollback, return failure
+        logger.warning(f"Order creation failed for customer {customer_id} due to validation/stock issue: {e}")
+        if conn:
+            conn.rollback() # Rollback any partial changes if validation failed mid-process
+        # Re-raise the specific exception to be caught by the route
+        raise e
+
+    except Exception as e:
+        # Handle unexpected database or other errors
+        logger.exception(f"Unexpected error during order creation for customer {customer_id}: {e}")
+        if conn:
+            conn.rollback() # Rollback the transaction on any error
+        # Raise a generic DB error for the route to handle
+        raise DatabaseOperationError(f"An internal error occurred while processing the order: {e}")
+
+    finally:
+        # Ensure the database connection is closed
+        if conn:
+            conn.close()
+            logger.debug("Database connection closed for create_order.")
+
+def get_confirmation_details(order_id, conn):
     """
-    Get order details by order ID.
-    Fetches order information, customer details, and order items from the database.
+    Retrieves detailed information for an order confirmation page.
+
+    Fetches the order, its items (including book details like title/price),
+    and customer information (name, address).
+
+    Args:
+        order_id (int): The ID of the order to retrieve details for.
+        conn (psycopg2.connection): An active database connection.
+
+    Returns:
+        dict | None: A dictionary containing structured order details suitable for
+                     the confirmation template, or None if the order is not found.
+                     Example structure:
+                     {
+                         "id": 123,
+                         "customer_name": "Jane Doe",
+                         "shipping_address": "123 Main St, Anytown, CA 90210",
+                         "total": Decimal('59.97'),
+                         "created_at": "2024-01-15T10:30:00",
+                         "items": [
+                             {"book_id": 1, "title": "The Great Novel", "price": 19.99, "quantity": 1, "subtotal": 19.99},
+                             {"book_id": 5, "title": "Another Story", "price": 9.99, "quantity": 4, "subtotal": 39.96}
+                         ]
+                     }
     """
-    # Validate order ID exist in the database
-    if not check_if_order_exists(order_id):
-        logger.error(f"Order with ID {order_id} does not exist")
+    logger.info(f"Fetching confirmation details for Order ID: {order_id}")
+    try:
+        # 1. Load the Order object and its basic items from the DB
+        # The `from_db` method should handle joining/fetching necessary item data.
+        order = Order.from_db(order_id, conn)
+
+        if not order:
+            logger.warning(f"Attempted to get confirmation details for non-existent Order ID: {order_id}")
+            return None # Order not found
+
+        order_dict = order.to_dict()
+        order_items = order_dict.get("items", [])
+        
+        # 2. Fetch Customer details associated with the order
+        customer = Customer.get_by_id(order.customer_id) # Assumes get_by_id uses its own connection or accepts `conn`
+        if not customer:
+            logger.error(f"Customer data not found for Customer ID {order.customer_id} associated with Order ID {order_id}.")
+            # Decide how to handle missing customer: return None, or return partial order data?
+            # Returning None might be safer.
+            return None
+
+        # 3. Prepare the dictionary for the template, enriching item data
+        order_details = {
+            "id": order.order_id,
+            "customer_name": customer.get_full_name().title(), # Get formatted name
+            "shipping_address": customer.get_single_line_address().title(), # Get formatted address
+            "total": order.total_amount, # Keep as Decimal or convert as needed
+            "created_at": order.order_date.strftime('%Y-%m-%d %H:%M:%S') if order.order_date else 'N/A', # Format date
+            "items": order_items
+        }
+
+        logger.info(f"Successfully retrieved confirmation details for Order ID: {order_id}")
+        return order_details
+
+    except Exception as e:
+        logger.exception(f"Error retrieving confirmation details for Order ID {order_id}: {e}")
+        # Don't expose internal errors directly, return None or raise a custom exception
         return None
-    
-    # Get DB connection
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to fetch order details by order ID and assign details
-            cur.execute('SELECT order_id, customer_id, order_date, total_amount FROM orders WHERE order_id = %s;', (order_id,))
-            row = cur.fetchone()
-            order_id = row[0]
-            customer_id = row[1]
-            order_date = row[2]
-            total_amount = row[3]
-            
-            # Execute the SQL query to fetch customer details by customer ID and assign details          
-            cur.execute('SELECT first_name, last_name FROM customers WHERE customer_id = %s;', (customer_id,))
-            row = cur.fetchone()
-            customer_name = row[0] + " " + row[1]
-            
-            # Execute the SQL query to fetch customer address by customer ID and assign details
-            # Fetch address fields
-            cur.execute('SELECT address_line1, address_line2, city, state, zip_code  FROM customers WHERE customer_id = %s;', (customer_id,))
-            row = cur.fetchone()
-            
-            # Concatenate address fields to create a full shipping address
-            # Check if address_line2 is None and format the address accordingly
-            if row[1] is None:
-                shipping_address = row[0] + ", " + row[2] + ", " + row[3] + " " + row[4]                
-            else:
-                shipping_address = row[0] + " " + row[1] + ", " + row[2] + ", " + row[3] + " " + row[4]
-            
-            # Execute the SQL query to fetch order items by order ID and assign details
-            # Fetch book title and price
-            cur.execute('SELECT book_id, quantity FROM order_items WHERE order_id = %s;', (order_id,))
-            rows = cur.fetchall()
-            
-            order_list = []
-            
-            # For loop to iterate through each order item and fetch book details
-            for row in rows:
-                book_id = row[0]
-                quantity = row[1]
-                
-                # Execute the SQL query to fetch book details by book ID and assign details
-                # Fetch book title and price
-                cur.execute('SELECT title, price FROM books WHERE book_id = %s;', (book_id,))
-                new_row = cur.fetchone()
-                title = new_row[0]
-                price = new_row[1]
-                
-                # Create a dictionary for each order item
-                order_list.append(
-                    {
-                        "title": title,
-                        "quantity": quantity,
-                        "price": price,
-                        "subtotal": quantity * price
-                    })
-            
-            # Create a dictionary to store order details             
-            order = {
-                "id": order_id,
-                "customer_name": customer_name.title(),
-                "shipping_address": shipping_address.title(),
-                "total": total_amount,
-                "created_at": order_date,
-                "items": order_list
-            }
-            return order
 
-def get_order_by_id(order_id):
-    """
-    Get DB connection and return order details by order ID.
-    """
-    # Get DB connection
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to fetch order details by order ID
-            cur.execute('SELECT order_id, customer_id, order_date, total_amount FROM orders WHERE order_id = %s;', (order_id,))
-            
-            # Verify if the order exists by fetching the row
-            row = cur.fetchone()
-            
-            # If row returns true, it means the order exists in the database and return the order details
-            if row:
-                return {
-                    'order_id': row[0],
-                    'customer_id': row[1],
-                    'order_date': row[2],
-                    'total_amount': row[3],
-                }
-                
-    return None
-        

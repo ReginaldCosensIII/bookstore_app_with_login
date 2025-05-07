@@ -1,132 +1,88 @@
-# app/services/auth_service.py
-import re
-from html import escape
-from flask_login import LoginManager
-from app.models.customer import Customer
-from app.models.db import get_db_connection
-from logger import logger  # Importing customer logger here
-from werkzeug.security import generate_password_hash, check_password_hash
+# bookstore_app_with_login/app/services/auth_service.py
 
+from werkzeug.security import check_password_hash # For verifying passwords
+from flask_login import LoginManager # Manages user sessions
+from app.models.customer import Customer # Customer model
+from app.models.db import get_db_connection # DB connection utility
+from logger import logger # Custom logger
+from html import escape # For basic input sanitization (prevent XSS)
+
+# Initialize the LoginManager instance.
+# This instance will be further configured in the application factory (__init__.py).
 login_manager = LoginManager()
-login_manager.login_view = 'main.login'
+login_manager.login_view = 'main.login' # Route name for the login page
+login_manager.login_message_category = 'info' # Flash message category
 
 @login_manager.user_loader
 def load_user(user_id):
     """
-    Load a user from the database using the user_id.
-    This function is called by Flask-Login to load the user object from the session.
-    """ 
-    try:
-        # Get a database connection
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                
-                # Execute the SQL query to fetch the user by user_id
-                cur.execute(
-                    'SELECT customer_id, email, password FROM customers WHERE customer_id = %s',
-                    (user_id,)
-                )
-                
-                # Fetch the user row from the database
-                row = cur.fetchone()
+    Callback function used by Flask-Login to load a user object from the
+    user ID stored in the session.
 
-        # Verify if the row is not None (i.e., user exists)
-        if row:
-            logger.info(f"User {user_id} loaded from session.")
-            return Customer(id=row["customer_id"], email=row["email"], password=row["password"])
-        
+    Args:
+        user_id (str): The user ID stored in the session cookie.
+
+    Returns:
+        Customer | None: The Customer object corresponding to the user_id,
+                        or None if the user is not found or an error occurs.
+    """
+    try:
+        # Ensure user_id is an integer before querying the database
+        customer_id = int(user_id)
+        # Use the Customer model's method to fetch the user by ID
+        customer = Customer.get_by_id(customer_id)
+        if customer:
+            logger.debug(f"User {customer_id} loaded successfully from session.")
         else:
-            logger.warning(f"User {user_id} not found in database.")
-            return None
-        
-    except Exception as e:
-        logger.error(f"Error loading user {user_id}: {e}")
+            # This case might happen if the user was deleted after logging in
+            logger.warning(f"User ID {customer_id} found in session, but no matching user in database.")
+        return customer # Return the Customer object or None if not found
+    except ValueError:
+        logger.error(f"Invalid user_id format encountered in session: {user_id}")
         return None
-    
+    except Exception as e:
+        # Catch potential database or other errors during user loading
+        logger.exception(f"Error loading user {user_id} from database: {e}")
+        return None # Important to return None on error
+
 def authenticate_user(email, password):
     """
-    Authenticate a user by checking the email and password against the database.
-    If the user is found and the password matches, return the user object.
-    """
-    try:
-        # Sanitize the email to prevent SQL injection and convert it to lowercase
-        email = email.strip()
-        email = email.lower()
-        email = escape(email)
-        
-        # Get a database connection
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                
-                # Execute the SQL query to fetch the user by email
-                cur.execute('SELECT customer_id, email, password FROM customers WHERE email = %s', (email,))
-                user = cur.fetchone()
-        
-        # Verify if the user exists and the password matches        
-        if user and user["password"] and check_password_hash(user["password"], password):
-            return Customer(id=user["customer_id"], email=user["email"], password=user["password"])
-        
-        else:
-            return None
-        
-    except Exception as e:
-        logger.exception("Error during user authentication.")
-        raise e
-    
-def login_user(user, password):
-    """
-    Log in a user by checking the email and password against the database.
-    If the user is found and the password matches, return True.
-    Otherwise, return False.
-    """
-    # Check user and check if the password matches using the check_password_hash function
-    if user and check_password_hash(user.password, password):
-        logger.info(f"User {user.email} logged in successfully.")
-        return True
-    
-    else:
-        logger.warning(f"Login failed for user {user.email}.")
-        return False
-    
-def get_user_by_email(email):
-    """
-    Fetch a user from the database using the email address.
-    This function is used to check if the email already exists in the database during registration.
-    """
-    # Convert the email to lowercase and escape it to prevent SQL injection
-    email = email.strip()
-    email = email.lower()
-    email = escape(email)
-    
-    # Get a database connection
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to fetch the user by email
-            cur.execute('SELECT customer_id, email, password FROM customers WHERE email = %s', (email))
-            
-            # Fetch the user row from the database
-            row = cur.fetchone()
-            
-            return row
+    Authenticates a user based on email and password.
 
-def get_name_by_id(user_id):
+    Args:
+        email (str): The user's email address.
+        password (str): The plain-text password entered by the user.
+
+    Returns:
+        Customer | None: The authenticated Customer object if credentials are valid,
+                        otherwise None.
+
+    Raises:
+        Exception: Propagates database or other unexpected errors.
     """
-    Fetch the first and last name of a user from the database using the user_id.
-    This function is used to display the user's name in the application.
-    """ 
-    # Get a database connection
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to fetch the user's first and last name by user_id
-            cur.execute('SELECT first_name, last_name FROM customers WHERE customer_id = %s', (user_id,))
-            
-            # Fetch the user row from the database
-            row = cur.fetchone()
-            
-            # Verify if the row is not None (i.e., user exists)
-            if row:
-                return f"{row[0]} {row[1]}"
-            
-    return None
+    if not email or not password:
+        logger.warning("Authentication attempt with empty email or password.")
+        return None # Basic check for empty credentials
+
+    # Sanitize email: remove leading/trailing whitespace and convert to lowercase
+    normalized_email = escape(email.strip().lower())
+
+    try:
+        # Fetch the customer record by the normalized email address
+        customer = Customer.get_by_email(normalized_email)
+
+        # Check if a customer was found and if the provided password matches the stored hash
+        if customer and customer.password and check_password_hash(customer.password, password):
+            # Password hashes match - authentication successful
+            logger.info(f"User '{normalized_email}' authenticated successfully.")
+            return customer # Return the Customer object
+        else:
+            # Either customer not found or password doesn't match
+            logger.warning(f"Authentication failed for user: {normalized_email}. Invalid email or password.")
+            return None # Indicate authentication failure
+
+    except Exception as e:
+        # Log any unexpected errors during the database query or password check
+        logger.exception(f"Error during authentication process for user {normalized_email}: {e}")
+        # Re-raise the exception to be handled by the calling route/function
+        raise
