@@ -30,38 +30,36 @@ A Flask-based web application for managing a bookstore inventory, featuring user
 ```
 bookstore_app_with_login/
 ├── app/
-│   ├── __init__.py                # Initializes the Flask application
-│   ├── auth_exceptions.py         # Custom exceptions for authentication-related errors
-│   ├── extensions.py              # Extensions setup (e.g., for SQLAlchemy, login manager, etc.)
-│   ├── order_exceptions.py        # Custom exceptions for order-related errors
-│   ├── routes.py                  # Defines application routes using Flask Blueprints
+│   ├── __init__.py                   # App factory: creates and configures Flask app
+│   ├── routes.py                     # Routes using Blueprint (`main`)
 │   ├── models/
-│   │   ├── __init__.py            # Makes the models directory a Python package
-│   │   ├── book.py                # Book model class definition
-│   │   ├── customer.py            # Customer model and user loader for authentication
-│   │   ├── db.py                  # Database connection and setup using psycopg2
-│   │   ├── order.py               # Order model class definition
-│   │   └── order_items.py         # OrderItem model class definition
+│   │   ├── __init__.py               
+│   │   ├── db.py                     # DB connection logic
+│   │   ├── customer.py               # Customer model and user loader
+│   │   ├── book.py                   # Book model
+│   │   ├── order.py                  # Order model
+│   │   └── order_item.py             # OrderItem model
 │   ├── services/
-│   │   ├── __init__.py            # Initializes the services package
-│   │   ├── auth_service.py        # Authentication logic: login, logout, credential validation
-│   │   ├── book_service.py        # Business logic for book inventory management
-│   │   ├── order_service.py       # Order creation, validation, inventory updates
-│   │   └── reg_service.py         # Handles registration logic and validation
-│   ├── templates/                 # HTML templates rendered by Flask
-│   │   ├── base.html              # Base template with shared layout and styles
-│   │   ├── index.html             # Homepage template
-│   │   ├── login.html             # Login page template
-│   │   ├── register.html          # Registration page template
-│   │   └── order_confirmation.html # Order confirmation page template
-│   └── static/css/styles.css      # Main CSS stylesheet for template styling
-├── .gitignore                     # Specifies files and directories to be ignored by Git
-├── .render.yaml                   # Configuration file for deployment on Render
-├── README.md                      # Project overview and setup instructions
-├── gen_password_hash.py           # Utility script for generating password hashes using werkzeug.security
-├── logger.py                      # Configures application-wide logging with timestamps and levels
-├── main.py                        # Entry point for running the application locally
-└── requirements.txt               # Lists Python dependencies for the app
+│   │   ├── __init__.py               # Makes services a package
+│   │   ├── auth_service.py           # Auth functions: login, validation, hashing
+│   │   ├── reg_service.py            # Registration logic (split from auth)
+│   │   ├── order_service.py          # Business logic for order processing
+│   │   └── book_service.py           # Business logic for book processing
+│   ├── templates/
+│   │   ├── base.html                 # Base layout used across templates
+│   │   ├── index.html                # Homepage
+│   │   ├── login.html                # Login page
+│   │   ├── register.html             # Registration page
+│   │   └── order_confirmation.html   # Order confirmation page
+│   ├── order_exceptions.py           # Custom exceptions for order errors
+│   └── auth_exceptions.py            # Custom exceptions for auth errors
+├── .gitignore                        # Excludes cache, logs, dumps, env files, etc.
+├── .render.yaml                      # Render deployment configuration
+├── main.py                           # Entry point for running app locally
+├── requirements.txt                  # Python dependencies
+├── logger.py                         # Logging setup used throughout the app
+├── gen_password_hash.py              # Tool to generate hashed passwords
+└── README.md                         # Project description, setup, usage
 
 ```
 ---
