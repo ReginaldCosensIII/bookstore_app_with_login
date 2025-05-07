@@ -1,244 +1,209 @@
-# app/services/reg_services.py
-import re
-from html import escape
-from logger import logger 
-from flask_login import LoginManager
-from app.models.customer import Customer
-from app.models.db import get_db_connection
-from werkzeug.security import generate_password_hash
+# bookstore_app_with_login/app/services/reg_service.py
 
-def validate_registration(form_data):
-    """
-    Validate registration form data.
-    Returns a list of error messages if validation fails.
-    """
-    # Initialize an empty list to store error messages
-    errors = []
+import re # Regular expression module for validation
+from html import escape # For basic XSS prevention on string inputs
+from logger import logger
+from app.models.customer import Customer # Customer database model
+from app.models.db import get_db_connection # Database connection utility
+from werkzeug.security import generate_password_hash # For hashing passwords
+# Import custom exceptions if needed for specific registration errors
+# from app.auth_exceptions import RegistrationError, UserAlreadyExists
 
-    # Validate each field in the form data
+# --- Constants for Validation ---
+# Regex patterns can be adjusted based on specific requirements
+# Basic email regex (adjust for stricter validation if needed)
+EMAIL_REGEX = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+# Example password strength: min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char
+PASSWORD_REGEX = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+={}\[\]:;\"'<>,.?/~`]).{8,}$"
+# Basic name validation (letters, spaces, hyphens, apostrophes, limited length)
+NAME_REGEX = r"^[A-Za-z\s'-]{1,50}$"
+# Phone validation (allows digits, optional hyphens/spaces/parentheses, specific length range)
+PHONE_DIGITS_REGEX = r"^\d{10,15}$" # Matches 10 to 15 digits after stripping formatting
+# ZIP code validation (allows 5 digits or 5+4 format)
+ZIP_CODE_REGEX = r"^\d{5}(-\d{4})?$"
+# State validation (exactly 2 letters)
+STATE_REGEX = r"^[A-Za-z]{2}$"
+# Basic address line validation (limit length, allow common characters)
+ADDRESS_REGEX = r"^[A-Za-z0-9\s.,#'\-\/]{1,100}$"
 
-    # First Name and Last Name
-    if not is_valid_name(form_data.get('first_name', '')):
-        errors.append("Invalid first name.")
-    if not is_valid_name(form_data.get('last_name', '')):
-        errors.append("Invalid last name.")
-
-    # Email
-    email = form_data.get('email', '')
-    if not is_valid_email(email):
-        errors.append("Invalid email format.")
-        
-    # Check if email is already taken    
-    elif is_email_taken(email):
-        errors.append("Email is already registered.")
-
-    # Phone
-    if not is_valid_phone(form_data.get('phone_number', '')):
-        errors.append("Invalid phone number. Use digits only, 10–15 digits.")
-
-    # Password
-    password = form_data.get('password', '')
-    confirm_password = form_data.get('confirm_password', '')
-    if not is_strong_password(password):
-        errors.append("Password must be at least 8 characters with an uppercase letter, number, and special character.")
-    elif password != confirm_password:
-        errors.append("Passwords do not match.")
-
-    # Address fields
-    if len(form_data.get('address_line1', '')) > 100:
-        errors.append("Address Line 1 too long.")
-    if len(form_data.get('address_line2', '')) > 100:
-        errors.append("Address Line 2 too long.")
-    if not is_valid_name(form_data.get('city', '')):
-        errors.append("Invalid city name.")
-    if not is_valid_state(form_data.get('state', '')):
-        errors.append("Invalid state. Use 2-letter abbreviation.")
-    if not is_valid_zip(form_data.get('zip_code', '')):
-        errors.append("Invalid ZIP code format.")
-
-    return errors
 
 def register_user(form_data):
     """
-    Register a new user in the database.
-    Returns True if registration is successful, False otherwise.
+    Handles the user registration process including validation and database insertion.
+
+    Args:
+        form_data (dict): A dictionary containing the user's registration details
+                          (e.g., from request.form).
+
+    Returns:
+        dict: A dictionary indicating success or failure:
+              {'success': True, 'message': 'Registration successful.'} on success.
+              {'success': False, 'messages': ['Error message 1', ...]} on failure.
     """
-    # Generate a hashed password
-    hashed_password = generate_password_hash(form_data['password'])
-    
-    # Normalize case for specific fields
-    lowercase_fields = ['first_name', 'last_name', 'email', 'phone_number', 'address_line1', 'address_line2', 'city', 'state', 'zip_code']
-    form_data = normalize_case_fields(form_data, lowercase_fields)
-    form_data = {k: v.lower() if isinstance(v, str) else v for k, v in form_data.items()}
-    
-    # Insert the user into the database   
+    logger.info(f"Starting registration process for email: {form_data.get('email')}")
+
+    # 1. Sanitize input first to prevent injection issues before validation/processing
+    # Note: sanitize_form_input might be better placed in the route before calling this service
+    safe_data = sanitize_form_input(form_data) # Ensure data is escaped
+
+    # 2. Validate the sanitized data
+    validation_errors = validate_registration(safe_data)
+    if validation_errors:
+        logger.warning(f"Registration validation failed for {safe_data.get('email')}: {validation_errors}")
+        # Return specific validation errors
+        return {'success': False, 'messages': validation_errors}
+
+    # 3. Hash the password securely
     try:
-        # Get a connection to the database
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-        
-                # Execute the SQL query to insert the new customer
-                cur.execute("""
-                    INSERT INTO customers (
-                        first_name, last_name, email, phone_number, password,
-                        address_line1, address_line2, city, state, zip_code,
-                        is_guest, created_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, false, NOW())
-                """, (
-                    form_data['first_name'],
-                    form_data['last_name'],
-                    form_data['email'].lower(),
-                    form_data['phone_number'],
-                    hashed_password,
-                    form_data['address_line1'],
-                    form_data['address_line2'],
-                    form_data['city'],
-                    form_data['state'],
-                    form_data['zip_code']
-                ))
-                
-            # Commit the transaction to save changes    
-            conn.commit()
-        
-        return True
-    
+        hashed_password = generate_password_hash(safe_data['password'])
     except Exception as e:
-        logger.error(f"Registration failed: {e}")
-        return False
+        logger.exception(f"Password hashing failed for {safe_data.get('email')}: {e}")
+        # Return a generic internal error message
+        return {'success': False, 'messages': ['An internal error occurred during registration.']}
 
-def get_user_by_email(email):
-    """
-    Fetch a user from the database by email.
-    Returns a dictionary with user details if found, None otherwise.
-    """
-    # Normalize email to lowercase
-    email = email.lower()
-    
-    # Get a connection to the database
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to fetch the user by email
-            cur.execute('SELECT customer_id, email, password FROM customers WHERE email = %s', (email))
-            
-            # Verify by fetching the row returned by the query and return it
-            return cur.fetchone()
+    # 4. Prepare Customer object data
+    # Combine first and last names for the 'name' field if it's still used in the DB schema
+    full_name = f"{safe_data.get('first_name', '')} {safe_data.get('last_name', '')}".strip()
 
-def get_name_by_id(user_id):
+    # 5. Attempt to save the new customer to the database
+    try:
+        # Create a Customer instance (without an ID initially)
+        new_customer = Customer(
+            customer_id=None, # Will be set by DB upon insertion
+            name=full_name,
+            email=safe_data['email'], # Already normalized (lowercase, stripped) by sanitize
+            phone_number=re.sub(r"[-()\s]", "", safe_data.get('phone_number', '')), # Store cleaned phone number
+            password=hashed_password, # Store the hashed password
+            is_guest=False, # New registrations are not guests
+            created_at=None, # Let DB handle timestamp
+            first_name=safe_data.get('first_name'),
+            last_name=safe_data.get('last_name'),
+            address_line1=safe_data.get('address_line1'),
+            address_line2=safe_data.get('address_line2'), # Will be None if not present
+            city=safe_data.get('city'),
+            state=safe_data.get('state'),     # Already normalized (lowercase) by sanitize
+            zip_code=safe_data.get('zip_code')
+        )
+
+        # Use the Customer model's save method
+        new_customer.save_to_db() # This handles the DB connection and commit
+
+        logger.info(f"Successfully registered new customer: {new_customer.email} with ID: {new_customer.customer_id}")
+        return {'success': True, 'message': 'Registration successful. Please log in.'}
+
+    except Exception as e:
+        # Catch potential database errors (e.g., unique constraint violation if email check failed somehow, connection issues)
+        logger.exception(f"Database error during registration for {safe_data.get('email')}: {e}")
+        # Check for specific DB errors if possible (e.g., unique violation)
+        # For now, return a generic error
+        return {'success': False, 'messages': ['Registration failed due to a database error. Please try again later.']}
+
+
+def validate_registration(data):
     """
-    Fetch the first and last name of a user by their ID.
-    Returns the full name as a string if found, None otherwise.
+    Validates the provided registration data dictionary.
+
+    Args:
+        data (dict): The sanitized registration data.
+
+    Returns:
+        list[str]: A list of error messages. An empty list indicates success.
     """
-    # Get a connection to the database
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to fetch the user's name by ID
-            cur.execute('SELECT first_name, last_name FROM customers WHERE customer_id = %s', (user_id,))
-            
-            # Verify by fetching the row returned by the query
-            row = cur.fetchone()
-            
-            # If a row returns True, return the full name
-            if row:
-                return f"{row[0]} {row[1]}"
-            
-    return None
+    errors = []
+    required_fields = [
+        'first_name', 'last_name', 'email', 'phone_number',
+        'password', 'confirm_password', 'address_line1',
+        'city', 'state', 'zip_code'
+    ]
+
+    # Check for missing required fields
+    for field in required_fields:
+        if not data.get(field):
+            errors.append(f"{field.replace('_', ' ').title()} is required.")
+
+    # If required fields are missing, return early
+    if errors:
+        return errors
+
+    # --- Field-specific Validations ---
+    if not re.match(NAME_REGEX, data['first_name']):
+        errors.append("Invalid first name format (letters, spaces, hyphens, apostrophes allowed, max 50 chars).")
+    if not re.match(NAME_REGEX, data['last_name']):
+        errors.append("Invalid last name format (letters, spaces, hyphens, apostrophes allowed, max 50 chars).")
+
+    # Email validation and uniqueness check
+    email = data['email']
+    if not re.match(EMAIL_REGEX, email):
+        errors.append("Invalid email format.")
+    else:
+        # Check if email already exists in the database
+        # This requires a database query - potentially move this check earlier or handle DB error in register_user
+        try:
+            if Customer.get_by_email(email):
+                errors.append("This email address is already registered.")
+                logger.warning(f"Registration attempt with existing email: {email}")
+        except Exception as e:
+            # Log DB error during validation but might let registration proceed to catch DB constraint error later
+            logger.error(f"Database error during email uniqueness check for {email}: {e}")
+            errors.append("Could not verify email uniqueness at this time.")
+
+
+    # Phone number validation (check digits after stripping formatting)
+    phone_digits = re.sub(r"[-()\s]", "", data['phone_number'])
+    if not re.match(PHONE_DIGITS_REGEX, phone_digits):
+        errors.append("Invalid phone number format (must contain 10-15 digits).")
+
+    # Password validation
+    password = data['password']
+    confirm_password = data['confirm_password']
+    if not re.match(PASSWORD_REGEX, password):
+         errors.append("Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.")
+    elif password != confirm_password:
+        errors.append("Password and confirmation password do not match.")
+
+    # Address validation
+    if not re.match(ADDRESS_REGEX, data['address_line1']):
+         errors.append("Invalid Address Line 1 format (max 100 chars, common characters allowed).")
+    # Address line 2 is optional, but validate if present
+    if data.get('address_line2') and not re.match(ADDRESS_REGEX, data['address_line2']):
+         errors.append("Invalid Address Line 2 format (max 100 chars, common characters allowed).")
+    if not re.match(NAME_REGEX, data['city']): # Assuming city names follow similar rules to person names
+        errors.append("Invalid city format.")
+    if not re.match(STATE_REGEX, data['state']):
+        errors.append("Invalid state format (must be 2-letter abbreviation).")
+    if not re.match(ZIP_CODE_REGEX, data['zip_code']):
+        errors.append("Invalid ZIP code format (e.g., 12345 or 12345-6789).")
+
+    return errors
+
 
 def sanitize_form_input(form_data):
     """
-    Sanitize form input to prevent XSS attacks and SQL injection.
-    Returns a dictionary with sanitized values.
-    """
-    # Escape all fields
-    sanitized = {k: escape(v) for k, v in form_data.items()}
-    
-    # Lowercase only certain keys
-    lowercase_keys = ['email', 'first_name', 'last_name', 'city', 'state']
-    
-    # Lowercase the values of specified keys
-    for key in lowercase_keys:
-        if key in sanitized and isinstance(sanitized[key], str):
-            sanitized[key] = sanitized[key].lower()
+    Sanitizes string values in a dictionary by escaping HTML and stripping whitespace.
+    Also converts specified fields to lowercase.
 
+    Args:
+        form_data (dict): The input dictionary (e.g., request.form).
+
+    Returns:
+        dict: A new dictionary with sanitized values.
+    """
+    sanitized = {}
+    # Fields to convert to lowercase during sanitization
+    lowercase_fields = {'email', 'first_name', 'last_name', 'city', 'state'}
+
+    for key, value in form_data.items():
+        if isinstance(value, str):
+            # Escape HTML special characters and strip leading/trailing whitespace
+            processed_value = escape(value.strip())
+            # Convert to lowercase if the key is in the designated set
+            if key in lowercase_fields:
+                processed_value = processed_value.lower()
+            sanitized[key] = processed_value
+        else:
+            # Keep non-string values as they are (e.g., numbers if form allows)
+            sanitized[key] = value
     return sanitized
 
-def normalize_case_fields(form_data, lowercase_fields=None):
-    """
-    Normalize the case of specified fields in the form data.
-    Returns a dictionary with normalized values.
-    """
-    # Normalize the case of specified fields to lowercase
-    lowercase_fields = lowercase_fields or []
-    
-    return {
-        k: v.lower() if k in lowercase_fields and isinstance(v, str) else v
-        for k, v in form_data.items()
-    }
-
-def is_valid_email(email):
-    """
-    Validate email format using regex and return True or False.
-    """
-    return re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", email)
-
-def is_email_taken(email):
-    """
-    Check if the email is already registered in the database.
-    Returns True if the email is taken, False otherwise.
-    """
-    # Normalize email to lowercase
-    email = email.lower()
-    
-    # Get a connection to the database
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            
-            # Execute the SQL query to check if the email exists
-            cur.execute("SELECT 1 FROM customers WHERE email = %s", (email,))
-            
-            return cur.fetchone() is not None
-
-def is_strong_password(password):
-    """
-    Validate password strength using regex.
-    Password must be at least 8 characters long, contain at least one uppercase letter,
-    one number, and one special character.
-    """
-    # Check if the password meets the criteria and return True or False
-    return re.match(r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*()_+])[A-Za-z\d!@#$%^&*()_+]{8,}$', password)
-
-def is_valid_name(name):
-    """
-    Validate name format using regex.
-    Name can contain letters, spaces, hyphens, and apostrophes.
-    """
-    # Check if the name meets the criteria and return True or False
-    return re.match(r"^[A-Za-z\s'-]{1,50}$", name)
-
-def is_valid_phone(phone):
-    """
-    Validate phone number format using regex.
-    Phone number can contain digits, spaces, hyphens, and parentheses.
-    """
-    # Remove common formatting symbols: hyphens, spaces, parentheses
-    cleared_phone = re.sub(r"[-()\s]", "", phone)
-    
-    # Check if the phone number meets the criteria and return True or False
-    return re.match(r"^\d{10,15}$", cleared_phone)
-
-def is_valid_zip(zip_code):
-    """
-    Validate ZIP code format using regex.
-    ZIP code can be 5 digits or 5 digits followed by a hyphen and 4 digits.
-    """
-    # Check if the ZIP code meets the criteria and return True or False
-    return re.match(r"^\d{5}(-\d{4})?$", zip_code)
-
-def is_valid_state(state):
-    """
-    Validate state format using regex.
-    State should be a 2-letter abbreviation.
-    """
-    # Check if the state meets the criteria and return True or False
-    return re.match(r"^[A-Za-z]{2}$", state)
+# Note: normalize_case_fields seems redundant if lowercase conversion is handled in sanitize_form_input.
+# Keeping sanitize_form_input as the primary sanitization step.
