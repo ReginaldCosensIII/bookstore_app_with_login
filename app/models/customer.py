@@ -240,7 +240,7 @@ class Customer(UserMixin):
             "email": self.email,
             "phone_number": self.phone_number,
             "is_guest": self.is_guest,
-            "created_at": self.created_at.isoformat() if self.created_at else None, # Format datetime
+            "created_at": self.created_at, # Format datetime
             "first_name": self.first_name,
             "last_name": self.last_name,
             "address_line1": self.address_line1,
@@ -248,7 +248,6 @@ class Customer(UserMixin):
             "city": self.city,
             "state": self.state,
             "zip_code": self.zip_code,
-            "shipping_address_display": self.get_shipping_address_display()
         }
 
     def __repr__(self):

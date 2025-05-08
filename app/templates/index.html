@@ -1,45 +1,50 @@
-{% extends "base.html" %} {# Use the updated base.html #}
+{% extends "base.html" %}
 
 {% block title %}Bookstore - Create Order{% endblock %}
 
 {% block content %}
 <h1 class="mb-4">Create New Order</h1>
 
-{# Flash messages handled by base.html #}
-
-{# Welcome message - styled slightly #}
 <p class="lead">Welcome, {{ users_name }}!</p>
 
-{# IMPORTANT: Keep the form and action intact #}
 <form id="order-form" method="POST" action="/create_order">
 
     <h3 class="mb-3">Select Books:</h3>
 
-    {# --- Book Selection using Cards --- #}
-    {# Responsive grid: 1 col default, 2 on sm, 3 on md, 4 on lg #}
     <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4 mb-4">
-        {# --- Loop through books - Jinja logic unchanged --- #}
         {% for book in books %}
         <div class="col">
-            {# Card for each book - h-100 for equal height #}
             <div class="card shadow-sm rounded h-100 book-card">
-                {# Optional Image - Add if you have image URLs #}
+                {# Optional Image - Add if you have image URLs for your books #}
                 {# <img src="{{ book.image_url | default(url_for('static', filename='images/placeholder.png')) }}" class="card-img-top" alt="{{ book.title }}"> #}
-                <div class="card-body d-flex flex-column"> {# Flex column for layout #}
+                <div class="card-body d-flex flex-column">
                     <h5 class="card-title">{{ book.title }}</h5>
-                    <p class="card-text text-muted flex-grow-1"><small>by {{ book.author }}</small></p> {# flex-grow pushes price/controls down #}
-                    <p class="card-text fs-5 fw-bold mb-3">${{ "%.2f"|format(book.price) }}</p>
+                    <p class="card-text text-muted flex-grow-1"><small>by {{ book.author }}</small></p> {# flex-grow-1 pushes price/controls down #}
 
-                    {# --- Checkbox and Quantity - Structure preserved for JS --- #}
-                    <div class="d-flex justify-content-between align-items-center mt-auto"> {# Align controls at bottom #}
+                    {# Price is now pushed down by flex-grow-1 on author and takes up remaining space before controls #}
+                    <p class="card-text fs-5 fw-bold mb-2">${{ "%.2f"|format(book.price) }}</p>
+
+                    {# Controls Area: Checkbox and Quantity #}
+                    <div class="d-flex justify-content-between align-items-center mb-3"> {# Increased bottom margin #}
                         <div class="form-check">
-                             {# Checkbox - Jinja value unchanged, added Bootstrap class #}
                             <input type="checkbox" class="form-check-input book-checkbox" value="{{ book.book_id }}" id="book_{{ book.book_id }}">
                             <label class="form-check-label" for="book_{{ book.book_id }}">Select</label>
                         </div>
-                        {# Quantity Input - Jinja data-book-id unchanged, added Bootstrap class #}
                         <input type="number" min="0" value="0" class="form-control quantity-input" data-book-id="{{ book.book_id }}" style="width: 80px;">
                     </div>
+
+                    {# --- NEW: "View Description" Button for Modal --- #}
+                    {% if book.description %} {# Only show button if description exists #}
+                    <button type="button" class="btn btn-sm btn-outline-primary w-100 view-description-btn"
+                            data-bs-toggle="modal" data-bs-target="#bookDetailModal"
+                            data-title="{{ book.title }}"
+                            data-author="{{ book.author }}"
+                            data-price="${{ '%.2f'|format(book.price) }}"
+                            data-description="{{ book.description }}">
+                        View Description
+                    </button>
+                    {% endif %}
+                    {# --- End "View Description" Button --- #}
                 </div>
             </div>
         </div>
@@ -48,18 +53,13 @@
                 <p class="text-center text-muted">No books available at the moment.</p>
             </div>
         {% endfor %}
-         {# --- End Book Loop --- #}
     </div>
-    {# --- End Book Selection Grid --- #}
 
-
-    {# --- Order Summary --- #}
     <div class="order-summary mt-5">
         <h3 class="mb-3">Order Summary:</h3>
-        {# Use Bootstrap table styling #}
-        <div class="table-responsive"> {# Make table scroll horizontally on small screens #}
+        <div class="table-responsive">
             <table class="table table-bordered table-hover">
-                <thead class="table-light"> {# Use lighter header #}
+                <thead class="table-light">
                     <tr>
                         <th>Title</th>
                         <th class="text-end">Quantity</th>
@@ -67,11 +67,9 @@
                         <th class="text-end">Total</th>
                     </tr>
                 </thead>
-                {# --- Summary Table Body - JS Populates This --- #}
                 <tbody id="order-summary">
-                    {# JavaScript will populate this section #}
+                    <tr><td colspan="4" class="text-center text-muted">Select books and quantity above</td></tr>
                 </tbody>
-                {# --- End Summary Table Body --- #}
                 <tfoot>
                     <tr class="table-light fw-bold">
                          <td colspan="3" class="text-end">Total Amount:</td>
@@ -81,43 +79,57 @@
             </table>
         </div>
     </div>
-    {# --- End Order Summary --- #}
 
-    {# Submit Button - Styled with Bootstrap #}
     <div class="d-grid gap-2 col-6 mx-auto mt-4">
         <button type="submit" class="btn btn-primary btn-lg">Submit Order</button>
     </div>
-
-    {# --- Hidden Inputs for JS - These remain unchanged --- #}
-    {# JavaScript will add/update these inputs: #}
-    {# <input type="hidden" name="items" value="..."> #}
-    {# <input type="hidden" name="total_amount" value="..."> #}
 </form>
-{# --- End Form --- #}
 
-{# Footer handled by base.html #}
+{# --- Bootstrap Modal Structure (Place once, outside the loop) --- #}
+{# This structure is the same as the previous "Option 1" example #}
+<div class="modal fade" id="bookDetailModal" tabindex="-1" aria-labelledby="bookDetailModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable"> {# Added modal-dialog-scrollable #}
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalBookTitle">Book Title</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <h6 class="mb-0" id="modalBookAuthor">Author</h6>
+        <p class="text-muted" id="modalBookPrice">Price</p>
+        <hr>
+        <p id="modalBookDescription">Full book description will go here.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        {# Optional: Add an "Add to Cart from Modal" button if desired #}
+        {# <button type="button" class="btn btn-primary">Add to Cart</button> #}
+      </div>
+    </div>
+  </div>
+</div>
+{# --- End Modal --- #}
+
 {% endblock %}
 
 
 {% block scripts %}
-{# --- IMPORTANT: JavaScript remains exactly the same --- #}
+{# --- Existing JavaScript for order form - Keep this! --- #}
 <script>
+    // Function to update the order total and summary table
       function updateTotal() {
           let total = 0.0;
           const orderSummary = document.getElementById("order-summary");
           const orderItems = [];
 
           document.querySelectorAll(".book-checkbox:checked").forEach(checkbox => {
-              // Find the closest card ancestor to then find elements within that card
-              const card = checkbox.closest(".book-card");
-              if (!card) return; // Should not happen, but safety check
+              const card = checkbox.closest(".book-card"); // Find parent card
+              if (!card) return; 
 
               const bookId = checkbox.value;
               const title = card.querySelector(".card-title").textContent.trim();
-              // Extract price carefully (assuming it's the bold text before controls)
               const priceText = card.querySelector(".fs-5.fw-bold").textContent.trim().replace('$', '');
               const price = parseFloat(priceText);
-              // Find the quantity input specifically associated with this book card
               const qtyInput = card.querySelector(`.quantity-input[data-book-id="${String(bookId)}"]`);
               const quantity = parseInt(qtyInput?.value || 0);
 
@@ -134,9 +146,9 @@
               }
           });
 
-          // Update order summary table (using Bootstrap table structure)
-          orderSummary.innerHTML = ''; // Clear previous summary
+          orderSummary.innerHTML = ''; // Clear previous summary rows
           if (orderItems.length === 0) {
+              // If no items, show a placeholder message in the table
               orderSummary.innerHTML = '<tr><td colspan="4" class="text-center text-muted">Select books and quantity above</td></tr>';
           } else {
                 orderItems.forEach(item => {
@@ -150,44 +162,38 @@
                     orderSummary.appendChild(row);
                 });
           }
-
-
-          // Update total amount display (within the tfoot span)
+          // Update total amount display
           document.getElementById("total-amount").textContent = `$${total.toFixed(2)}`;
           return orderItems; // Return items for prepareOrderData
       }
 
+      // Function to prepare data for form submission
       function prepareOrderData() {
           const items = updateTotal(); // Recalculate to get current state
           if (items.length === 0) {
               alert("Please select at least one book and set a quantity greater than 0.");
               return null; // Indicate failure
           }
-
           const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
           // Ensure items only contains book_id and quantity as needed by backend
           const backendItems = items.map(item => ({
               book_id: item.book_id,
               quantity: item.quantity
           }));
-
-
           return {
               items: backendItems, // Send only required data
               total_amount: totalAmount.toFixed(2)
           };
       }
 
+      // Event listener for form submission
       document.getElementById("order-form").addEventListener("submit", function (e) {
           const orderData = prepareOrderData();
           if (!orderData) {
               e.preventDefault();  // Block form submission if data is invalid
               return;
           }
-
           const form = e.target;
-
           // Add or update hidden input for items (JSON stringified)
           let itemsInput = form.querySelector('input[name="items"]');
           if (!itemsInput) {
@@ -196,9 +202,7 @@
               itemsInput.name = "items";
               form.appendChild(itemsInput);
           }
-          // Make sure to stringify the correct structure expected by backend
           itemsInput.value = JSON.stringify(orderData.items);
-
           // Add or update hidden input for total_amount
           let totalInput = form.querySelector('input[name="total_amount"]');
           if (!totalInput) {
@@ -208,19 +212,48 @@
               form.appendChild(totalInput);
           }
           totalInput.value = orderData.total_amount;
-
-          // Form submission proceeds naturally now
       });
-
-      // Keep order summary live-updated when checkboxes or quantity inputs change
+      
+      // Event listeners for live updates
       document.querySelectorAll(".book-checkbox, .quantity-input").forEach(el => {
           el.addEventListener("input", updateTotal); // Use 'input' for better responsiveness
       });
-
+      
       // Initial calculation on page load
       document.addEventListener('DOMContentLoaded', updateTotal);
+</script>
+{# --- END Existing JavaScript for order form --- #}
 
-  </script>
-{# Include jQuery only if other parts of your site absolutely need it, Bootstrap 5 JS doesn't require it #}
-{# <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> #}
+
+{# --- JavaScript for Book Detail Modal --- #}
+{# This script is the same as in the previous "Option 1" example #}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var bookDetailModalEl = document.getElementById('bookDetailModal');
+    if (bookDetailModalEl) { // Check if the modal element exists
+        // Use Bootstrap's own event system for modals
+        bookDetailModalEl.addEventListener('show.bs.modal', function (event) {
+            // Button that triggered the modal
+            var button = event.relatedTarget; // This is the button that was clicked
+
+            // Extract info from data-* attributes of the button
+            var title = button.getAttribute('data-title');
+            var author = button.getAttribute('data-author');
+            var price = button.getAttribute('data-price');
+            var description = button.getAttribute('data-description');
+
+            // Update the modal's content using its specific element IDs
+            var modalTitle = bookDetailModalEl.querySelector('#modalBookTitle');
+            var modalAuthor = bookDetailModalEl.querySelector('#modalBookAuthor');
+            var modalPrice = bookDetailModalEl.querySelector('#modalBookPrice');
+            var modalDescription = bookDetailModalEl.querySelector('#modalBookDescription');
+
+            if(modalTitle) modalTitle.textContent = title;
+            if(modalAuthor) modalAuthor.textContent = 'by ' + author; // Add 'by' prefix for context
+            if(modalPrice) modalPrice.textContent = price;
+            if(modalDescription) modalDescription.textContent = description; // Using textContent for safety against XSS
+        });
+    }
+});
+</script>
 {% endblock %}
