@@ -2,6 +2,7 @@
 
 # Import models
 from app.models.book import Book
+from app.models.order import Order
 from app.models.customer import Customer
 from app.models.db import get_db_connection # Import DB connection function
 
@@ -47,7 +48,9 @@ def order_confirmation():
         order_id = int(order_id) # Ensure order_id is an integer
         with get_db_connection() as conn:
             order_details = get_confirmation_details(order_id, conn) # Fetch details via service
-
+            customer = Customer.get_by_id(Order.from_db(order_id, conn).customer_id)
+            user_name = customer.get_full_name().title()
+            print(user_name)
         if not order_details:
             flash("Order not found or you do not have permission to view it.", "warning")
             logger.warning(f"Order confirmation attempt failed: Order ID {order_id} not found or access denied for user {current_user.customer_id}.")
@@ -55,7 +58,7 @@ def order_confirmation():
 
         logger.info(f"Displaying confirmation for Order ID: {order_id}")
         # Pass the fetched details to the template
-        return render_template("order_confirmation.html", order=order_details)
+        return render_template("order_confirmation.html", order=order_details, users_name=user_name)
 
     except ValueError:
         flash("Invalid Order ID format.", "danger")

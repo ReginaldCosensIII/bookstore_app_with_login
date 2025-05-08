@@ -11,7 +11,7 @@ class Book:
     Provides methods for CRUD operations (Create, Read, Update, Delete - though Delete isn't implemented yet)
     and stock management related to books in the database.
     """
-    def __init__(self, book_id, title, author, genre, price, stock_quantity):
+    def __init__(self, book_id, title, author, genre, price, stock_quantity, description="This is a placeholder description."):
         """
         Initializes a Book object.
 
@@ -30,7 +30,8 @@ class Book:
         # Ensure price is stored/handled as Decimal for financial calculations
         self.price = Decimal(price) if price is not None else None
         self.stock_quantity = int(stock_quantity) if stock_quantity is not None else 0
-
+        self.description = description
+        
     def get_id(self):
         """Returns the book's unique ID."""
         return self.book_id
@@ -108,7 +109,7 @@ class Book:
     # --- Class Methods for Database Interaction ---
 
     @classmethod
-    def add_book(cls, title, author, genre, price, stock_quantity):
+    def add_book(cls, title, author, genre, price, stock_quantity, description="This is a placeholder description."):
         """
         Adds a new book record to the database.
 
@@ -129,9 +130,9 @@ class Book:
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        """INSERT INTO books (title, author, genre, price, stock_quantity)
-                           VALUES (%s, %s, %s, %s, %s) RETURNING book_id""",
-                        (title, author, genre, Decimal(price), int(stock_quantity))
+                        """INSERT INTO books (title, author, genre, price, stock_quantity, description)
+                           VALUES (%s, %s, %s, %s, %s, %s) RETURNING book_id""",
+                        (title, author, genre, Decimal(price), int(stock_quantity), description)
                     )
                     book_id = cur.fetchone()[0] # Fetch the returned book_id
                 conn.commit() # Commit the transaction
@@ -168,7 +169,8 @@ class Book:
                     author=book_data["author"],
                     genre=book_data["genre"],
                     price=book_data["price"], # Already Decimal from DB if type is NUMERIC
-                    stock_quantity=book_data["stock_quantity"]
+                    stock_quantity=book_data["stock_quantity"],
+                    description=book_data["description"]
                 )
             else:
                 logger.warning(f"No book found for ID: {book_id}")
@@ -201,7 +203,8 @@ class Book:
                     author=book_data["author"],
                     genre=book_data["genre"],
                     price=book_data["price"],
-                    stock_quantity=book_data["stock_quantity"]
+                    stock_quantity=book_data["stock_quantity"],
+                    description=book_data["description"]
                 ))
             logger.info(f"Retrieved {len(books_list)} books from database.")
         except Exception as e:
@@ -209,7 +212,31 @@ class Book:
             # Return empty list on error, or could re-raise
         return books_list
 
-    def update_book(self, title=None, author=None, genre=None, price=None, stock_quantity=None):
+    def to_dict(self, include_book_description=True):
+        """
+        Converts the Book object and optionally its description into a dictionary.
+
+        Args:
+            include_book_description (bool): If True, book description is included. Defaults to True.
+
+        Returns:
+            dict: A dictionary representation of the book.
+        """
+        book_data = {
+            "book_id": self.book_id,
+            "title": self.title,
+            "author": self.author,
+            "genre": self.genre,
+            "price": self.price, # Already Decimal from DB if type is NUMERIC
+            "stock_quantity": self.stock_quantity,
+        }
+        
+        if include_book_description:
+            book_data["description"] = self.description
+            
+        return book_data
+
+    def update_book(self, title=None, author=None, genre=None, price=None, stock_quantity=None, description=None):
         """
         Updates the details of this book instance in the database.
         Only updates fields that are provided (not None).
@@ -234,6 +261,7 @@ class Book:
         if genre is not None: fields_to_update['genre'] = genre
         if price is not None: fields_to_update['price'] = Decimal(price) # Ensure Decimal
         if stock_quantity is not None: fields_to_update['stock_quantity'] = int(stock_quantity)
+        if description is not None: fields_to_update['description'] = description
 
         if not fields_to_update:
             logger.info(f"No fields provided to update for book {self.book_id}.")

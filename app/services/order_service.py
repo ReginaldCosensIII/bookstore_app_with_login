@@ -211,7 +211,7 @@ def get_confirmation_details(order_id, conn):
             "customer_name": customer.get_full_name().title(), # Get formatted name
             "shipping_address": customer.get_single_line_address().title(), # Get formatted address
             "total": order.total_amount, # Keep as Decimal or convert as needed
-            "created_at": order.order_date.strftime('%Y-%m-%d %H:%M:%S') if order.order_date else 'N/A', # Format date
+            "created_at": order.order_date.isoformat(), # Format date
             "items": order_items
         }
 
