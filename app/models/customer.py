@@ -13,8 +13,8 @@ class Customer(UserMixin):
     saving, and representing customer data, and integrates with Flask-Login.
     """
     def __init__(self, customer_id, name, email, phone_number, password,
-                 is_guest=False, created_at=None, first_name=None, last_name=None,
-                 address_line1=None, address_line2=None, city=None, state=None, zip_code=None):
+                 created_at=None, first_name=None, last_name=None,
+                 address_line1=None, address_line2=None, city=None, state=None, zip_code=None, role="customer"):
         """
         Initializes a Customer object.
 
@@ -24,7 +24,6 @@ class Customer(UserMixin):
             email (str): The customer's email address (used for login).
             phone_number (str): The customer's phone number.
             password (str): The hashed password for the customer. NEVER store plain text.
-            is_guest (bool): Flag indicating if the customer is a guest. Defaults to False.
             created_at (datetime, optional): Timestamp when the customer was created. Defaults to None.
             first_name (str, optional): Customer's first name. Defaults to None.
             last_name (str, optional): Customer's last name. Defaults to None.
@@ -33,13 +32,13 @@ class Customer(UserMixin):
             city (str, optional): City of the shipping address. Defaults to None.
             state (str, optional): State (abbreviation) of the shipping address. Defaults to None.
             zip_code (str, optional): ZIP code of the shipping address. Defaults to None.
+            role (str): A identifier indicating if the user is a Customer or Admin. Defaults to customer.
         """
         # --- Core Attributes ---
         self.customer_id = customer_id # Primary key
         self.email = email.lower().strip() if email else None # Normalize email
         self.phone_number = phone_number
         self.password = password # Hashed password
-        self.is_guest = is_guest
         self.created_at = created_at
 
         # --- Name Attributes (Prefer first/last over single 'name') ---
@@ -54,6 +53,7 @@ class Customer(UserMixin):
         self.city = city
         self.state = state
         self.zip_code = zip_code
+        self.role = role
 
     # --- Flask-Login required property ---
     @property
@@ -88,7 +88,6 @@ class Customer(UserMixin):
             email=row_dict.get("email"),
             phone_number=row_dict.get("phone_number"),
             password=row_dict.get("password"), # Password hash
-            is_guest=row_dict.get("is_guest", False),
             created_at=row_dict.get("created_at"),
             first_name=row_dict.get("first_name"),
             last_name=row_dict.get("last_name"),
@@ -97,6 +96,7 @@ class Customer(UserMixin):
             city=row_dict.get("city"),
             state=row_dict.get("state"),
             zip_code=row_dict.get("zip_code"),
+            role=row_dict.get("role")
         )
 
     @classmethod
@@ -174,10 +174,10 @@ class Customer(UserMixin):
             raise ValueError("Cannot save a customer that already has an ID. Use an update method instead.")
 
         insert_query = """
-            INSERT INTO customers (name, email, phone_number, password, is_guest,
+            INSERT INTO customers (name, email, phone_number, password,
                                    first_name, last_name, address_line1, address_line2,
                                    city, state, zip_code, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             RETURNING customer_id;
         """
         # Combine first/last name if 'name' wasn't explicitly provided
@@ -188,7 +188,7 @@ class Customer(UserMixin):
                 with conn.cursor() as cur:
                     cur.execute(insert_query, (
                         calculated_name, self.email, self.phone_number, self.password,
-                        self.is_guest, self.first_name, self.last_name,
+                        self.first_name, self.last_name,
                         self.address_line1, self.address_line2, self.city,
                         self.state, self.zip_code
                     ))
@@ -238,8 +238,7 @@ class Customer(UserMixin):
             "customer_id": self.customer_id,
             "name": self.get_full_name(), # Use the combined name
             "email": self.email,
-            "phone_number": self.phone_number,
-            "is_guest": self.is_guest,
+            "phone_number": self.phone_number,            
             "created_at": self.created_at, # Format datetime
             "first_name": self.first_name,
             "last_name": self.last_name,
@@ -248,6 +247,7 @@ class Customer(UserMixin):
             "city": self.city,
             "state": self.state,
             "zip_code": self.zip_code,
+            "role": self.role
         }
 
     def __repr__(self):

@@ -74,7 +74,6 @@ def register_user(form_data):
             email=safe_data['email'], # Already normalized (lowercase, stripped) by sanitize
             phone_number=re.sub(r"[-()\s]", "", safe_data.get('phone_number', '')), # Store cleaned phone number
             password=hashed_password, # Store the hashed password
-            is_guest=False, # New registrations are not guests
             created_at=None, # Let DB handle timestamp
             first_name=safe_data.get('first_name'),
             last_name=safe_data.get('last_name'),
